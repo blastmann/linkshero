@@ -23,7 +23,7 @@ function parseKeywords(value: string): string[] {
 }
 
 function buildSearchText(link: LinkItem): string {
-  return `${link.title ?? ''} ${link.url ?? ''} ${link.sourceHost ?? ''}`.toLowerCase()
+  return `${link.title ?? ''} ${link.url ?? ''} ${link.sourceHost ?? ''} ${link.normalizedTitle ?? ''}`.toLowerCase()
 }
 
 function matchesAnyKeyword(haystack: string, keywords: string[]): boolean {

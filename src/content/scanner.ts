@@ -1,3 +1,5 @@
+import { dedupePirateBayLinks, isPirateBayHost, normalizeTitleValue } from './piratebay-helpers'
+
 const SCAN_MESSAGE = 'links-hero/scan'
 const APPLY_TEMPLATE_MESSAGE = 'links-hero/apply-template'
 const CLEAR_TEMPLATE_MESSAGE = 'links-hero/clear-template'
@@ -19,6 +21,9 @@ interface LinkItem {
   title: string
   sourceHost: string
   selected?: boolean
+  normalizedTitle?: string
+  seeders?: number
+  leechers?: number
 }
 
 interface TemplateMatch {
@@ -131,6 +136,27 @@ function extractTitle(anchor: HTMLAnchorElement): string {
   }
 
   return anchor.href
+}
+
+function extractPirateBayStats(anchor: HTMLAnchorElement): { seeders?: number; leechers?: number } {
+  const row = anchor.closest('tr')
+  if (!row) {
+    return {}
+  }
+
+  const numericCells = row.querySelectorAll<HTMLTableCellElement>('td[align="right"]')
+  const parseValue = (cell?: HTMLTableCellElement | null) => {
+    if (!cell) {
+      return undefined
+    }
+    const value = parseInt(cell.textContent?.trim() ?? '', 10)
+    return Number.isFinite(value) ? value : undefined
+  }
+
+  const seeders = parseValue(numericCells[0] ?? row.querySelector('td:nth-of-type(3)'))
+  const leechers = parseValue(numericCells[1] ?? row.querySelector('td:nth-of-type(4)'))
+
+  return { seeders, leechers }
 }
 
 function ensureStyles() {
@@ -266,7 +292,8 @@ function buildTemplateRows(template: TemplateDefinition): { rows: RowState[]; li
           id: generateId(),
           url: href,
           title,
-          sourceHost
+          sourceHost,
+          normalizedTitle: normalizeTitleValue(title)
         })
       }
 
@@ -526,16 +553,30 @@ function scanDefaultLinks(): LinkItem[] {
     }
 
     if (!dedupe.has(href)) {
-      dedupe.set(href, {
+      const title = extractTitle(anchor)
+      const baseLink: LinkItem = {
         id: generateId(),
         url: href,
-        title: extractTitle(anchor),
-        sourceHost
-      })
+        title,
+        sourceHost,
+        normalizedTitle: normalizeTitleValue(title)
+      }
+
+      if (isPirateBayHost(sourceHost)) {
+        const stats = extractPirateBayStats(anchor)
+        baseLink.seeders = stats.seeders
+        baseLink.leechers = stats.leechers
+      }
+
+      dedupe.set(href, baseLink)
     }
   })
 
-  return Array.from(dedupe.values())
+  let links = Array.from(dedupe.values())
+  if (isPirateBayHost(sourceHost)) {
+    links = dedupePirateBayLinks(links)
+  }
+  return links
 }
 
 function scanLinks(): LinkItem[] {

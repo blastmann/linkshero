@@ -4,6 +4,9 @@ export interface LinkItem {
   title: string
   sourceHost: string
   selected?: boolean
+  normalizedTitle?: string
+  seeders?: number
+  leechers?: number
 }
 
 export interface ScanResponse {
