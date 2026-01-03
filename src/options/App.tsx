@@ -167,7 +167,9 @@ const App = () => {
     await new Promise<void>((resolve, reject) => {
       chrome.scripting.executeScript(
         {
-          target: { tabId },
+          target: { tabId, allFrames: true },
+          world: 'ISOLATED',
+          injectImmediately: true,
           files: ['content.js']
         },
         () => {

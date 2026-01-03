@@ -59,11 +59,14 @@ async function queryActiveTab(): Promise<ActiveTab> {
   })
 }
 
-async function injectScanner(tabId: number): Promise<void> {
+async function injectScanner(tabId: number, frameIds?: number[]): Promise<void> {
   return new Promise((resolve, reject) => {
+    const target = frameIds && frameIds.length ? { tabId, frameIds } : { tabId, allFrames: true }
     chrome.scripting.executeScript(
       {
-        target: { tabId },
+        target,
+        world: 'ISOLATED',
+        injectImmediately: true,
         files: ['content.js']
       },
       () => {
@@ -78,18 +81,70 @@ async function injectScanner(tabId: number): Promise<void> {
   })
 }
 
-async function requestScan(tabId: number): Promise<ScanResponse> {
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
+}
+
+async function sendScanMessage(tabId: number, frameId: number): Promise<ScanResponse> {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type: SCAN_MESSAGE }, response => {
+    chrome.tabs.sendMessage(tabId, { type: SCAN_MESSAGE }, { frameId }, response => {
       const err = chrome.runtime.lastError
       if (err) {
         reject(new Error(err.message))
         return
       }
-
       resolve(response as ScanResponse)
     })
   })
+}
+
+async function requestScan(tabId: number): Promise<LinkItem[]> {
+  const framesResult = await chrome.webNavigation
+    .getAllFrames({ tabId })
+    .catch(() => undefined as chrome.webNavigation.GetAllFrameDetails[] | undefined)
+  const frames = Array.isArray(framesResult) ? framesResult : []
+  const targets = frames.length
+    ? frames.map(frame => (frame as chrome.webNavigation.GetAllFrameDetails & { frameId?: number }).frameId ?? 0)
+    : [0]
+
+  const results = await Promise.allSettled(
+    targets.map(frameId =>
+      sendScanMessage(tabId, frameId).catch(async error => {
+        const message = getErrorMessage(error)
+        if (message.includes('Receiving end does not exist')) {
+          await injectScanner(tabId, [frameId])
+          return sendScanMessage(tabId, frameId)
+        }
+        throw error
+      })
+    )
+  )
+
+  const dedupe = new Set<string>()
+  const links: LinkItem[] = []
+
+  results.forEach(result => {
+    if (result.status === 'fulfilled' && result.value.success && result.value.links) {
+      result.value.links.forEach(link => {
+        if (!dedupe.has(link.url)) {
+          dedupe.add(link.url)
+          links.push(link)
+        }
+      })
+    }
+  })
+
+  if (!links.length) {
+    const rejected = results.find(r => r.status === 'rejected')
+    if (rejected && rejected.status === 'rejected') {
+      throw rejected.reason
+    }
+  }
+
+  return links
 }
 
 async function pushToBackground(payload: { links: LinkItem[]; config: Aria2Config }) {
@@ -175,13 +230,12 @@ const App = () => {
         return
       }
       await injectScanner(tab.id)
-      const response = await requestScan(tab.id)
-
-      if (!response.success || !response.links) {
-        throw new Error(response.error ?? '扫描失败')
+      const responseLinks = await requestScan(tab.id)
+      if (!responseLinks.length) {
+        throw new Error('未能在页面中找到可用链接')
       }
 
-      const next = response.links.map(link => ({
+      const next = responseLinks.map(link => ({
         ...link,
         selected: typeof link.selected === 'boolean' ? link.selected : true
       }))
@@ -319,7 +373,9 @@ const App = () => {
           </button>
           <button
             className="icon-button"
-            onClick={handleScan}
+            onClick={() => {
+              void handleScan()
+            }}
             disabled={loading || !chromeReady}
             title="重新扫描"
             aria-label="重新扫描"
