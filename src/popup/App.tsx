@@ -302,9 +302,22 @@ const App = () => {
           </p>
         </div>
         <div className="header-actions">
-          <button onClick={openSettingsPage}>打开配置页</button>
-          <button onClick={handleScan} disabled={loading || !chromeReady}>
-            {loading ? '扫描中…' : '重新扫描'}
+          <button
+            className="icon-button"
+            onClick={openSettingsPage}
+            title="打开配置页"
+            aria-label="打开配置页"
+          >
+            <span aria-hidden="true">⚙</span>
+          </button>
+          <button
+            className="icon-button"
+            onClick={handleScan}
+            disabled={loading || !chromeReady}
+            title="重新扫描"
+            aria-label="重新扫描"
+          >
+            <span aria-hidden="true">{loading ? '⏳' : '↻'}</span>
           </button>
         </div>
       </header>
