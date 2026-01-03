@@ -99,6 +99,20 @@ let templateRuntime: TemplateRuntime | null = null
 let fallbackToast: HTMLDivElement | null = null
 let toastTimer: number | null = null
 
+function isElementVisible(element: Element | null): boolean {
+  if (!element || !(element instanceof HTMLElement)) {
+    return false
+  }
+
+  const style = window.getComputedStyle(element)
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+    return false
+  }
+
+  const rect = element.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
+}
+
 function generateId() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -221,6 +235,10 @@ function buildTemplateRows(template: TemplateDefinition): { rows: RowState[]; li
   const rows: RowState[] = []
 
   rowElements.forEach((element, index) => {
+    if (!isElementVisible(element)) {
+      return
+    }
+
     const anchors = Array.from(element.querySelectorAll<HTMLAnchorElement>(template.selectors.link))
     if (!anchors.length) {
       return
@@ -229,6 +247,10 @@ function buildTemplateRows(template: TemplateDefinition): { rows: RowState[]; li
     const rowLinks: LinkItem[] = []
 
     anchors.forEach(anchor => {
+      if (!isElementVisible(anchor)) {
+        return
+      }
+
       const href = anchor.href
       if (!href) {
         return
@@ -494,6 +516,10 @@ function scanDefaultLinks(): LinkItem[] {
   const dedupe = new Map<string, LinkItem>()
 
   anchors.forEach(anchor => {
+    if (!isElementVisible(anchor)) {
+      return
+    }
+
     const href = anchor.href
     if (!href) {
       return

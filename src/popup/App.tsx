@@ -13,6 +13,25 @@ type Status =
   | null
 
 const chromeReady = typeof chrome !== 'undefined' && !!chrome.tabs
+const KEYWORD_SPLIT_REGEX = /[,，]/
+
+function parseKeywords(value: string): string[] {
+  return value
+    .split(KEYWORD_SPLIT_REGEX)
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function buildSearchText(link: LinkItem): string {
+  return `${link.title ?? ''} ${link.url ?? ''} ${link.sourceHost ?? ''}`.toLowerCase()
+}
+
+function matchesAnyKeyword(haystack: string, keywords: string[]): boolean {
+  if (!keywords.length) {
+    return true
+  }
+  return keywords.some(keyword => haystack.includes(keyword))
+}
 
 interface ActiveTab {
   id: number
@@ -107,27 +126,15 @@ const App = () => {
   const filteredLinks = useMemo(() => {
     let result = [...rawLinks]
 
-    const toKeywords = (value: string) =>
-      value
-        .split(',')
-        .map(item => item.trim().toLowerCase())
-        .filter(Boolean)
-
-    const includes = toKeywords(includeFilter)
-    const excludes = toKeywords(excludeFilter)
+    const includes = parseKeywords(includeFilter)
+    const excludes = parseKeywords(excludeFilter)
 
     if (includes.length) {
-      result = result.filter(link => {
-        const haystack = `${link.title} ${link.url}`.toLowerCase()
-        return includes.some(keyword => haystack.includes(keyword))
-      })
+      result = result.filter(link => matchesAnyKeyword(buildSearchText(link), includes))
     }
 
     if (excludes.length) {
-      result = result.filter(link => {
-        const haystack = `${link.title} ${link.url}`.toLowerCase()
-        return !excludes.some(keyword => haystack.includes(keyword))
-      })
+      result = result.filter(link => !matchesAnyKeyword(buildSearchText(link), excludes))
     }
 
     if (sortBy === 'title-asc') {
