@@ -7,8 +7,17 @@ export type PirateComparable = {
   leechers?: number
 }
 
+const RELEASE_TAG_REGEX =
+  /\b(480p|720p|1080p|2160p|4k|hevc|x265|x264|h\.?264|av1|10bit|webrip|webdl|web-dl|bluray|brrip|hdrip|hdr|remux|aac|ddp\d+|dolby|hdr10)\b/g
+
 export function normalizeTitleValue(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, '').trim()
+  return title
+    .toLowerCase()
+    .replace(/[\[\](){}]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(RELEASE_TAG_REGEX, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export function isPirateBayHost(host = window.location.hostname): boolean {

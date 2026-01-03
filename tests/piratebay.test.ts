@@ -52,14 +52,16 @@ describe('Pirate Bay dedupe prioritization', () => {
 
   it('reduces dataset to unique normalized titles', () => {
     const deduped = dedupePirateBayLinks(dataset)
-    const uniqueTitles = new Set(dataset.map(item => item.normalizedTitle ?? item.title))
+    const uniqueTitles = new Set(
+      dataset.map(item => item.normalizedTitle ?? normalizeTitleValue(item.title))
+    )
     expect(deduped.length).toBe(uniqueTitles.size)
   })
 
   it('keeps entry with highest seeds (and lowest leechers) per title', () => {
     const grouped = new Map<string, { seeders: number; leechers: number }>()
     dataset.forEach(link => {
-      const key = link.normalizedTitle ?? link.title
+      const key = link.normalizedTitle ?? normalizeTitleValue(link.title)
       const existing = grouped.get(key)
       const seeds = link.seeders ?? -1
       const leechers = link.leechers ?? Number.MAX_SAFE_INTEGER
@@ -74,7 +76,7 @@ describe('Pirate Bay dedupe prioritization', () => {
 
     const deduped = dedupePirateBayLinks(dataset)
     deduped.forEach(link => {
-      const key = link.normalizedTitle ?? link.title
+      const key = link.normalizedTitle ?? normalizeTitleValue(link.title)
       const expectation = grouped.get(key)
       expect(expectation).toBeTruthy()
       expect(link.seeders ?? -1).toBe(expectation!.seeders)

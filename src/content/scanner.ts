@@ -1,13 +1,27 @@
 import { dedupePirateBayLinks, isPirateBayHost, normalizeTitleValue } from './piratebay-helpers'
 
-const SCAN_MESSAGE = 'links-hero/scan'
-const APPLY_TEMPLATE_MESSAGE = 'links-hero/apply-template'
-const CLEAR_TEMPLATE_MESSAGE = 'links-hero/clear-template'
-const PUSH_MESSAGE = 'links-hero/push'
-const DEFAULT_ARIA2_ENDPOINT = 'http://127.0.0.1:6800/jsonrpc'
-const STORAGE_KEYS = {
-  aria2Config: 'linksHero.aria2Config'
-} as const
+declare global {
+  interface Window {
+    __linksHeroContentLoaded?: boolean
+    __linksHeroScannerInjected?: boolean
+  }
+}
+
+(() => {
+  if ((window as Window).__linksHeroContentLoaded) {
+    console.debug('[Links Hero] content script already loaded, skip duplicate injection')
+    return
+  }
+  ;(window as Window).__linksHeroContentLoaded = true
+
+  const SCAN_MESSAGE = 'links-hero/scan'
+  const APPLY_TEMPLATE_MESSAGE = 'links-hero/apply-template'
+  const CLEAR_TEMPLATE_MESSAGE = 'links-hero/clear-template'
+  const PUSH_MESSAGE = 'links-hero/push'
+  const DEFAULT_ARIA2_ENDPOINT = 'http://127.0.0.1:6800/jsonrpc'
+  const STORAGE_KEYS = {
+    aria2Config: 'linksHero.aria2Config'
+  } as const
 
 interface Aria2Config {
   endpoint: string
@@ -71,17 +85,16 @@ async function getAria2Config(): Promise<Aria2Config> {
   })
 }
 
-declare global {
-  interface Window {
-    __linksHeroScannerInjected?: boolean
+  const SCAN_FLAG = '__linksHeroScannerInjected'
+const STYLE_ID = 'links-hero-style'
+
+const LINK_SELECTORS = 'a[href^="magnet:"],a[href$=".torrent"]'
+function logDebug(...args: unknown[]) {
+  if (typeof console !== 'undefined') {
+    console.debug('[Links Hero]', ...args)
   }
 }
 
-const SCAN_FLAG = '__linksHeroScannerInjected'
-const STYLE_ID = 'links-hero-style'
-
-const LINK_SELECTORS =
-  'a[href^="magnet:"],a[href$=".torrent"],a[href^="http://"],a[href^="https://"]'
 
 interface RowState {
   element: HTMLElement
@@ -124,7 +137,49 @@ function generateId() {
     : `${Date.now()}-${Math.random()}`
 }
 
+function getMagnetDisplayName(href: string): string | null {
+  if (!href.startsWith('magnet:')) {
+    return null
+  }
+  try {
+    const magnetUrl = new URL(href)
+    const dn = magnetUrl.searchParams.get('dn')
+    return dn ? decodeURIComponent(dn) : null
+  } catch {
+    return null
+  }
+}
+
+function extractPirateDisplayTitle(anchor: HTMLAnchorElement): string | null {
+  const row = anchor.closest('tr')
+  if (!row) {
+    return null
+  }
+  const detName = row.querySelector('.detName a')
+  const text = detName?.textContent?.trim()
+  if (text) {
+    return text
+  }
+  return null
+}
+
 function extractTitle(anchor: HTMLAnchorElement): string {
+  if (isPirateBayHost()) {
+    const magnetName = getMagnetDisplayName(anchor.href)
+    if (magnetName) {
+      return magnetName
+    }
+    const pirateName = extractPirateDisplayTitle(anchor)
+    if (pirateName) {
+      return pirateName
+    }
+  } else {
+    const magnetName = getMagnetDisplayName(anchor.href)
+    if (magnetName) {
+      return magnetName
+    }
+  }
+
   const text = anchor.textContent?.trim()
   if (text) {
     return text
@@ -139,22 +194,27 @@ function extractTitle(anchor: HTMLAnchorElement): string {
 }
 
 function extractPirateBayStats(anchor: HTMLAnchorElement): { seeders?: number; leechers?: number } {
-  const row = anchor.closest('tr')
+  const row = anchor.closest('tr, li.list-entry')
   if (!row) {
     return {}
   }
 
-  const numericCells = row.querySelectorAll<HTMLTableCellElement>('td[align="right"]')
-  const parseValue = (cell?: HTMLTableCellElement | null) => {
-    if (!cell) {
-      return undefined
+  const parseValue = (selectors: string[]) => {
+    for (const selector of selectors) {
+      const cell = row.querySelector<HTMLElement>(selector)
+      if (!cell) {
+        continue
+      }
+      const value = parseInt(cell.textContent?.trim() ?? '', 10)
+      if (Number.isFinite(value)) {
+        return value
+      }
     }
-    const value = parseInt(cell.textContent?.trim() ?? '', 10)
-    return Number.isFinite(value) ? value : undefined
+    return undefined
   }
 
-  const seeders = parseValue(numericCells[0] ?? row.querySelector('td:nth-of-type(3)'))
-  const leechers = parseValue(numericCells[1] ?? row.querySelector('td:nth-of-type(4)'))
+  const seeders = parseValue(['.item-seed', 'td:nth-of-type(4)', 'td[align="right"]:nth-of-type(1)'])
+  const leechers = parseValue(['.item-leech', 'td:nth-of-type(5)', 'td[align="right"]:nth-of-type(2)'])
 
   return { seeders, leechers }
 }
@@ -541,6 +601,7 @@ function scanDefaultLinks(): LinkItem[] {
   const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>(LINK_SELECTORS))
   const sourceHost = window.location.hostname
   const dedupe = new Map<string, LinkItem>()
+  logDebug('scanDefaultLinks:start', { sourceHost, anchorCount: anchors.length })
 
   anchors.forEach(anchor => {
     if (!isElementVisible(anchor)) {
@@ -574,8 +635,12 @@ function scanDefaultLinks(): LinkItem[] {
 
   let links = Array.from(dedupe.values())
   if (isPirateBayHost(sourceHost)) {
+    logDebug('piratebay:before-dedupe', links.map(link => link.title))
     links = dedupePirateBayLinks(links)
+    logDebug('piratebay:after-dedupe', links.map(link => ({ title: link.title, normalized: link.normalizedTitle, seeders: link.seeders, leechers: link.leechers })))
   }
+
+  logDebug('scanDefaultLinks:end', { uniqueCount: links.length })
   return links
 }
 
@@ -629,4 +694,6 @@ if (!(window as Window)[SCAN_FLAG]) {
   ;(window as Window)[SCAN_FLAG] = true
   setupListener()
 }
+
+})()
 
