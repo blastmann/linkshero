@@ -11,7 +11,8 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'popup.html'),
         background: resolve(__dirname, 'src/background/index.ts'),
-        content: resolve(__dirname, 'src/content/scanner.ts')
+        content: resolve(__dirname, 'src/content/scanner.ts'),
+        options: resolve(__dirname, 'options.html')
       },
       output: {
         manualChunks: undefined,
@@ -21,6 +22,9 @@ export default defineConfig({
           }
           if (chunk.name === 'content') {
             return 'content.js'
+          }
+          if (chunk.name === 'options') {
+            return 'assets/options.js'
           }
           return 'assets/[name].js'
         },

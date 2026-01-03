@@ -1,20 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
-import {
-  APPLY_TEMPLATE_MESSAGE,
-  CLEAR_TEMPLATE_MESSAGE,
-  SCAN_MESSAGE,
-  PUSH_MESSAGE
-} from '../shared/messages'
-import { getAria2Config, saveAria2Config } from '../shared/storage'
-import { deleteTemplate, getTemplates, saveTemplate } from '../shared/templates'
-import type {
-  Aria2Config,
-  LinkItem,
-  PushOutcome,
-  ScanResponse,
-  TemplateDefinition
-} from '../shared/types'
+import { SCAN_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
+import { getAria2Config } from '../shared/storage'
+import type { Aria2Config, LinkItem, PushOutcome, ScanResponse } from '../shared/types'
 
 type LinkWithSelection = LinkItem & { selected: boolean }
 
@@ -26,13 +14,24 @@ type Status =
 
 const chromeReady = typeof chrome !== 'undefined' && !!chrome.tabs
 
-async function queryActiveTabId(): Promise<number> {
+interface ActiveTab {
+  id: number
+  url?: string
+}
+
+function isInjectableUrl(url?: string | null): boolean {
+  if (!url) {
+    return true
+  }
+  return /^(https?|file|ftp):/i.test(url)
+}
+
+async function queryActiveTab(): Promise<ActiveTab> {
   return new Promise((resolve, reject) => {
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      const tabId = tabs[0]?.id
-
-      if (typeof tabId === 'number') {
-        resolve(tabId)
+      const tab = tabs[0]
+      if (tab?.id !== undefined) {
+        resolve({ id: tab.id, url: tab.url })
         return
       }
 
@@ -91,29 +90,13 @@ function formatLinksText(links: LinkItem[]) {
   return links.map(link => link.url).join('\n')
 }
 
-function createTemplateId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random()}`
-}
-
 const App = () => {
   const [rawLinks, setRawLinks] = useState<LinkWithSelection[]>([])
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<Status>(null)
+  const [autoTriggered, setAutoTriggered] = useState(false)
   const [ariaConfig, setAriaConfig] = useState<Aria2Config>({
     endpoint: DEFAULT_ARIA2_ENDPOINT
-  })
-  const [savingConfig, setSavingConfig] = useState(false)
-  const [templates, setTemplates] = useState<TemplateDefinition[]>([])
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
-  const [templateForm, setTemplateForm] = useState({
-    name: '',
-    hostSuffix: '',
-    pathRegex: '',
-    row: '',
-    link: '',
-    title: ''
   })
   const [includeFilter, setIncludeFilter] = useState('')
   const [excludeFilter, setExcludeFilter] = useState('')
@@ -165,13 +148,9 @@ const App = () => {
     getAria2Config()
       .then(config => setAriaConfig(config))
       .catch(error => setStatus({ kind: 'error', text: error.message }))
-
-    getTemplates()
-      .then(list => setTemplates(list))
-      .catch(error => setStatus({ kind: 'error', text: error.message }))
   }, [])
 
-  const handleScan = async () => {
+  const handleScan = useCallback(async () => {
     if (!chromeReady) {
       return
     }
@@ -180,9 +159,16 @@ const App = () => {
     setStatus({ kind: 'info', text: '正在扫描当前页面…' })
 
     try {
-      const tabId = await queryActiveTabId()
-      await injectScanner(tabId)
-      const response = await requestScan(tabId)
+      const tab = await queryActiveTab()
+      if (!isInjectableUrl(tab.url)) {
+        setStatus({
+          kind: 'error',
+          text: '当前页面无法注入（如 chrome://），请切换到普通网页后再试'
+        })
+        return
+      }
+      await injectScanner(tab.id)
+      const response = await requestScan(tab.id)
 
       if (!response.success || !response.links) {
         throw new Error(response.error ?? '扫描失败')
@@ -202,7 +188,15 @@ const App = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!chromeReady || autoTriggered) {
+      return
+    }
+    setAutoTriggered(true)
+    void handleScan()
+  }, [autoTriggered, handleScan])
 
   const updateSelection = (id: string, selected: boolean) => {
     setRawLinks(prev => prev.map(link => (link.id === id ? { ...link, selected } : link)))
@@ -288,295 +282,32 @@ const App = () => {
     }
   }
 
-  const handleSaveConfig = async () => {
-    setSavingConfig(true)
-    try {
-      await saveAria2Config(ariaConfig)
-      setStatus({ kind: 'success', text: '配置已保存' })
-    } catch (error) {
-      setStatus({
-        kind: 'error',
-        text: error instanceof Error ? error.message : '保存失败'
-      })
-    } finally {
-      setSavingConfig(false)
-    }
-  }
-
-  const selectedTemplate = templates.find(template => template.id === selectedTemplateId) ?? null
-
-  const handleTemplateCreate = async () => {
-    if (!templateForm.row || !templateForm.link) {
-      setStatus({ kind: 'error', text: '请填写行与链接选择器' })
+  const openSettingsPage = () => {
+    if (chrome.runtime.openOptionsPage) {
+      chrome.runtime.openOptionsPage()
       return
     }
-
-    const newTemplate: TemplateDefinition = {
-      id: createTemplateId(),
-      name: templateForm.name || `模板 ${templates.length + 1}`,
-      match: {
-        hostSuffix: templateForm.hostSuffix
-          .split(',')
-          .map(item => item.trim())
-          .filter(Boolean),
-        pathRegex: templateForm.pathRegex || undefined
-      },
-      selectors: {
-        row: templateForm.row,
-        link: templateForm.link,
-        title: templateForm.title || undefined
-      }
-    }
-
-    try {
-      await saveTemplate(newTemplate)
-      setTemplates(prev => [...prev, newTemplate])
-      setSelectedTemplateId(newTemplate.id)
-      setTemplateForm({
-        name: '',
-        hostSuffix: '',
-        pathRegex: '',
-        row: '',
-        link: '',
-        title: ''
-      })
-      setStatus({ kind: 'success', text: '模板已保存' })
-    } catch (error) {
-      setStatus({
-        kind: 'error',
-        text: error instanceof Error ? error.message : '保存模板失败'
-      })
-    }
-  }
-
-  const handleTemplateDelete = async (id: string) => {
-    try {
-      await deleteTemplate(id)
-      setTemplates(prev => prev.filter(item => item.id !== id))
-      if (selectedTemplateId === id) {
-        setSelectedTemplateId(null)
-      }
-      setStatus({ kind: 'success', text: '模板已删除' })
-    } catch (error) {
-      setStatus({
-        kind: 'error',
-        text: error instanceof Error ? error.message : '删除失败'
-      })
-    }
-  }
-
-  const applyTemplateToPage = async () => {
-    if (!chromeReady) {
-      setStatus({ kind: 'error', text: '扩展上下文不可用' })
-      return
-    }
-    if (!selectedTemplate) {
-      setStatus({ kind: 'error', text: '请选择模板' })
-      return
-    }
-    setStatus({ kind: 'info', text: `正在应用模板：${selectedTemplate.name}` })
-    try {
-      const tabId = await queryActiveTabId()
-      await injectScanner(tabId)
-      await new Promise<void>((resolve, reject) => {
-        chrome.tabs.sendMessage(
-          tabId,
-          { type: APPLY_TEMPLATE_MESSAGE, template: selectedTemplate },
-          response => {
-            const err = chrome.runtime.lastError
-            if (err) {
-              reject(new Error(err.message))
-              return
-            }
-            if (!response?.ok) {
-              reject(new Error(response?.error ?? '应用模板失败'))
-              return
-            }
-            resolve()
-          }
-        )
-      })
-      setStatus({ kind: 'success', text: '模板已应用' })
-    } catch (error) {
-      setStatus({
-        kind: 'error',
-        text: error instanceof Error ? error.message : '应用模板失败'
-      })
-    }
-  }
-
-  const clearTemplateFromPage = async () => {
-    if (!chromeReady) {
-      setStatus({ kind: 'error', text: '扩展上下文不可用' })
-      return
-    }
-    try {
-      const tabId = await queryActiveTabId()
-      await injectScanner(tabId)
-      await new Promise<void>((resolve, reject) => {
-        chrome.tabs.sendMessage(tabId, { type: CLEAR_TEMPLATE_MESSAGE }, response => {
-          const err = chrome.runtime.lastError
-          if (err) {
-            reject(new Error(err.message))
-            return
-          }
-          if (!response?.ok) {
-            reject(new Error(response?.error ?? '清理模板失败'))
-            return
-          }
-          resolve()
-        })
-      })
-      setStatus({ kind: 'success', text: '已移除页面模板 UI' })
-    } catch (error) {
-      setStatus({
-        kind: 'error',
-        text: error instanceof Error ? error.message : '移除模板失败'
-      })
-    }
+    const url = chrome.runtime.getURL('options.html')
+    window.open(url, '_blank')
   }
 
   return (
     <div className="popup">
       <header className="header">
-        <h1>Links Hero</h1>
-        <button onClick={handleScan} disabled={loading || !chromeReady}>
-          {loading ? '扫描中…' : '扫描当前页'}
-        </button>
-      </header>
-
-      <section className="config">
-        <h2>aria2 配置</h2>
-        <label>
-          RPC 地址
-          <input
-            type="url"
-            value={ariaConfig.endpoint}
-            onChange={event => setAriaConfig({ ...ariaConfig, endpoint: event.target.value })}
-            placeholder="http://127.0.0.1:6800/jsonrpc"
-          />
-        </label>
-        <label>
-          Token（可选）
-          <input
-            type="text"
-            value={ariaConfig.token ?? ''}
-            onChange={event => setAriaConfig({ ...ariaConfig, token: event.target.value })}
-            placeholder="token:xxxx"
-          />
-        </label>
-        <label>
-          下载目录（可选）
-          <input
-            type="text"
-            value={ariaConfig.dir ?? ''}
-            onChange={event => setAriaConfig({ ...ariaConfig, dir: event.target.value })}
-            placeholder="/data/downloads"
-          />
-        </label>
-        <button onClick={handleSaveConfig} disabled={savingConfig}>
-          {savingConfig ? '保存中…' : '保存配置'}
-        </button>
-      </section>
-
-      <section className="templates">
-        <h2>站点模板</h2>
-        <div className="template-actions">
-          <button onClick={applyTemplateToPage} disabled={!selectedTemplate}>
-            启用模板
+        <div>
+          <h1>Links Hero</h1>
+          <p className="subhead">
+            {loading ? '正在扫描…' : `已捕获 ${rawLinks.length} 条链接`}
+            {ariaConfig.endpoint ? ` · aria2: ${ariaConfig.endpoint}` : ''}
+          </p>
+        </div>
+        <div className="header-actions">
+          <button onClick={openSettingsPage}>打开配置页</button>
+          <button onClick={handleScan} disabled={loading || !chromeReady}>
+            {loading ? '扫描中…' : '重新扫描'}
           </button>
-          <button onClick={clearTemplateFromPage}>移除页面 UI</button>
         </div>
-        {templates.length === 0 ? (
-          <p className="empty">暂无模板，先创建一个。</p>
-        ) : (
-          <ul className="template-list">
-            {templates.map(template => (
-              <li key={template.id}>
-                <label>
-                  <input
-                    type="radio"
-                    name="template"
-                    value={template.id}
-                    checked={selectedTemplateId === template.id}
-                    onChange={() => setSelectedTemplateId(template.id)}
-                  />
-                  <div>
-                    <span className="template-name">{template.name}</span>
-                    <span className="template-meta">
-                      {template.match.hostSuffix?.join(', ') || '*'} /{' '}
-                      {template.match.pathRegex || '.*'}
-                    </span>
-                    <span className="template-meta">
-                      row: {template.selectors.row} | link: {template.selectors.link}
-                    </span>
-                  </div>
-                </label>
-                <button onClick={() => handleTemplateDelete(template.id)}>删除</button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="template-form">
-          <h3>新建模板</h3>
-          <label>
-            名称
-            <input
-              type="text"
-              value={templateForm.name}
-              onChange={event => setTemplateForm(prev => ({ ...prev, name: event.target.value }))}
-            />
-          </label>
-          <label>
-            Host 后缀（逗号分隔）
-            <input
-              type="text"
-              value={templateForm.hostSuffix}
-              onChange={event =>
-                setTemplateForm(prev => ({ ...prev, hostSuffix: event.target.value }))
-              }
-            />
-          </label>
-          <label>
-            Path 正则
-            <input
-              type="text"
-              value={templateForm.pathRegex}
-              onChange={event =>
-                setTemplateForm(prev => ({ ...prev, pathRegex: event.target.value }))
-              }
-            />
-          </label>
-          <label>
-            行选择器
-            <input
-              type="text"
-              value={templateForm.row}
-              onChange={event => setTemplateForm(prev => ({ ...prev, row: event.target.value }))}
-              placeholder="table tr"
-            />
-          </label>
-          <label>
-            链接选择器
-            <input
-              type="text"
-              value={templateForm.link}
-              onChange={event => setTemplateForm(prev => ({ ...prev, link: event.target.value }))}
-              placeholder="a[href^='magnet:']"
-            />
-          </label>
-          <label>
-            标题选择器（可选）
-            <input
-              type="text"
-              value={templateForm.title}
-              onChange={event => setTemplateForm(prev => ({ ...prev, title: event.target.value }))}
-            />
-          </label>
-          <button onClick={handleTemplateCreate}>添加模板</button>
-        </div>
-      </section>
+      </header>
 
       <section className="actions">
         <h2>批量操作</h2>
@@ -604,7 +335,7 @@ const App = () => {
       </section>
 
       <section className="filters">
-        <h2>过滤与整理</h2>
+        <h2>快速过滤</h2>
         <label>
           包含关键词（逗号分隔）
           <input

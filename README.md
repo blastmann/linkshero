@@ -17,12 +17,13 @@ npm run build # 生成 dist/，在 Chrome 中以“加载已解压扩展”方�
 
 ## 目录
 
-- `src/popup`：Popup UI 入口
+- `src/popup`：Popup UI（打开即自动扫描）
+- `src/options`：插件配置页（aria2、模板）
 - `src/content`：扫描脚本（按需注入）
 - `src/background`：Service Worker，负责 aria2 RPC
 - `src/shared`：跨端通用类型与工具
 
 ## 配置
 
-Popup 中可设置 aria2 RPC 地址（默认 `http://127.0.0.1:6800/jsonrpc`）与 token，设置保存在 `chrome.storage.sync`。
+点击 Popup 右上角“打开配置页”或在扩展详情页进入 Options，可设置 aria2 RPC 地址、token、下载目录以及站点模板；所有配置保存在 `chrome.storage.sync`。
 
