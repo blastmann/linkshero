@@ -348,16 +348,31 @@ const App = () => {
     })
   }
 
-  const sendMessage = async <T,>(tabId: number, message: unknown): Promise<T> => {
+  const listFrameIds = async (tabId: number): Promise<number[]> => {
+    const framesResult = await chrome.webNavigation
+      .getAllFrames({ tabId })
+      .catch(() => undefined as chrome.webNavigation.GetAllFrameDetails[] | undefined)
+    const frames = Array.isArray(framesResult) ? framesResult : []
+    return frames.length
+      ? frames.map(frame => (frame as chrome.webNavigation.GetAllFrameDetails & { frameId?: number }).frameId ?? 0)
+      : [0]
+  }
+
+  const sendMessage = async <T,>(tabId: number, message: unknown, frameId?: number): Promise<T> => {
     return new Promise((resolve, reject) => {
-      chrome.tabs.sendMessage(tabId, message, response => {
+      const callback = (response: unknown) => {
         const err = chrome.runtime.lastError
         if (err) {
           reject(new Error(err.message))
           return
         }
         resolve(response as T)
-      })
+      }
+      if (frameId !== undefined) {
+        chrome.tabs.sendMessage(tabId, message, { frameId }, callback)
+        return
+      }
+      chrome.tabs.sendMessage(tabId, message, callback)
     })
   }
 
@@ -374,11 +389,33 @@ const App = () => {
         return
       }
       await injectScanner(tab.id)
-      await sendMessage<{ ok: boolean; error?: string }>(tab.id, {
-        type: APPLY_TEMPLATE_MESSAGE,
-        template: selectedTemplate
-      })
-      setStatus({ kind: 'success', text: '模板已应用到当前页面' })
+      const frameIds = await listFrameIds(tab.id)
+      const results = await Promise.allSettled(
+        frameIds.map(frameId =>
+          sendMessage<{ ok: boolean; error?: string }>(tab.id, {
+            type: APPLY_TEMPLATE_MESSAGE,
+            template: selectedTemplate
+          }, frameId)
+        )
+      )
+      const okResult = results.find(
+        result => result.status === 'fulfilled' && result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (okResult?.value.ok) {
+        setStatus({ kind: 'success', text: '模板已应用到当前页面' })
+        return
+      }
+      const errorResult = results.find(
+        result => result.status === 'fulfilled' && !result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (errorResult?.value.error) {
+        throw new Error(errorResult.value.error)
+      }
+      const rejected = results.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined
+      if (rejected?.reason) {
+        throw rejected.reason
+      }
+      throw new Error('模板未能应用到当前页面')
     } catch (error) {
       setStatus({
         kind: 'error',
@@ -395,10 +432,34 @@ const App = () => {
         return
       }
       await injectScanner(tab.id)
-      await sendMessage<{ ok: boolean; error?: string }>(tab.id, {
-        type: CLEAR_TEMPLATE_MESSAGE
-      })
-      setStatus({ kind: 'success', text: '已移除页面上的模板 UI' })
+      const frameIds = await listFrameIds(tab.id)
+      const results = await Promise.allSettled(
+        frameIds.map(frameId =>
+          sendMessage<{ ok: boolean; error?: string }>(
+            tab.id,
+            { type: CLEAR_TEMPLATE_MESSAGE },
+            frameId
+          )
+        )
+      )
+      const okResult = results.find(
+        result => result.status === 'fulfilled' && result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (okResult?.value.ok) {
+        setStatus({ kind: 'success', text: '已移除页面上的模板 UI' })
+        return
+      }
+      const errorResult = results.find(
+        result => result.status === 'fulfilled' && !result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (errorResult?.value.error) {
+        throw new Error(errorResult.value.error)
+      }
+      const rejected = results.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined
+      if (rejected?.reason) {
+        throw rejected.reason
+      }
+      throw new Error('未能移除模板 UI')
     } catch (error) {
       setStatus({
         kind: 'error',

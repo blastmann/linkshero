@@ -48,32 +48,6 @@ declare global {
 const SCAN_FLAG = '__linksHeroScannerInjected'
 const STYLE_ID = 'links-hero-style'
 
-const DEBUG_SERVER_ENDPOINT = 'http://127.0.0.1:7242/ingest/f6fbaedc-b261-4d72-b001-4bf343b73dda'
-const DEBUG_SESSION_ID = 'debug-session'
-const DEBUG_RUN_ID = `pre-fix-${Date.now()}`
-
-function emitDebugLog(hypothesisId: string, location: string, message: string, data: Record<string, unknown>) {
-  if (typeof fetch !== 'function') {
-    return
-  }
-  const payload = {
-    sessionId: DEBUG_SESSION_ID,
-    runId: DEBUG_RUN_ID,
-    hypothesisId,
-    location,
-    message,
-    data,
-    timestamp: Date.now()
-  }
-  // #region agent log
-  fetch(DEBUG_SERVER_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).catch(() => {})
-  // #endregion
-}
-
   function logDebug(...args: unknown[]) {
     if (typeof console !== 'undefined') {
       console.debug('[Links Hero]', ...args)
@@ -343,10 +317,6 @@ function handleRowInteraction(row: RowState, shiftKey: boolean) {
 }
 
 function sendPushRequest(links: LinkItem[], config: Awaited<ReturnType<typeof getAria2Config>>) {
-  emitDebugLog('H7', 'src/content/scanner.ts:319', 'push:request:start', {
-    linkCount: links.length,
-    endpoint: config.endpoint
-  })
   return new Promise<void>((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
@@ -359,22 +329,13 @@ function sendPushRequest(links: LinkItem[], config: Awaited<ReturnType<typeof ge
       response => {
         const err = chrome.runtime.lastError
         if (err) {
-          emitDebugLog('H8', 'src/content/scanner.ts:333', 'push:request:error', {
-            message: err.message
-          })
           reject(new Error(err.message))
           return
         }
         if (!response?.ok) {
-          emitDebugLog('H8', 'src/content/scanner.ts:336', 'push:request:error', {
-            message: response?.error ?? 'unknown'
-          })
           reject(new Error(response?.error ?? '推送失败'))
           return
         }
-        emitDebugLog('H8', 'src/content/scanner.ts:339', 'push:request:success', {
-          linkCount: links.length
-        })
         resolve()
       }
     )
@@ -436,11 +397,6 @@ function createToolbar(): HTMLDivElement {
 }
 
 function applyTemplate(template: TemplateDefinition) {
-  emitDebugLog('H5', 'src/content/scanner.ts:400', 'template:apply:start', {
-    templateId: template.id,
-    host: window.location.hostname,
-    path: window.location.pathname
-  })
   if (!matchTemplate(template)) {
     showToast('模板与当前页面不匹配')
     throw new Error('模板与当前页面不匹配')
@@ -450,11 +406,6 @@ function applyTemplate(template: TemplateDefinition) {
   ensureStyles()
 
   const { rows, links } = buildTemplateRows(template)
-  emitDebugLog('H6', 'src/content/scanner.ts:408', 'template:apply:buildRows', {
-    templateId: template.id,
-    rowCount: rows.length,
-    linkCount: links.length
-  })
   if (!rows.length) {
     showToast('模板未命中任何行')
     throw new Error('模板未命中任何行')

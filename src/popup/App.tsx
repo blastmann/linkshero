@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
-import { LLM_AGGREGATE_MESSAGE, SCAN_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
+import { APPLY_TEMPLATE_MESSAGE, CLEAR_TEMPLATE_MESSAGE, LLM_AGGREGATE_MESSAGE, SCAN_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
 import { getLlmConfig } from '../shared/llm-config'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
-import type { Aria2Config, LinkItem, PushOutcome, ScanResponse, SiteRuleDefinition } from '../shared/types'
+import { getTemplates } from '../shared/templates'
+import type { Aria2Config, LinkItem, PushOutcome, ScanResponse, SiteRuleDefinition, TemplateDefinition } from '../shared/types'
 
 type LinkWithSelection = LinkItem & { selected: boolean }
 
@@ -170,6 +171,29 @@ async function pushToBackground(payload: { links: LinkItem[]; config: Aria2Confi
   })
 }
 
+async function sendTabMessage<T>(tabId: number, frameId: number, message: unknown): Promise<T> {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.sendMessage(tabId, message, { frameId }, response => {
+      const err = chrome.runtime.lastError
+      if (err) {
+        reject(new Error(err.message))
+        return
+      }
+      resolve(response as T)
+    })
+  })
+}
+
+async function getFrameIds(tabId: number): Promise<number[]> {
+  const framesResult = await chrome.webNavigation
+    .getAllFrames({ tabId })
+    .catch(() => undefined as chrome.webNavigation.GetAllFrameDetails[] | undefined)
+  const frames = Array.isArray(framesResult) ? framesResult : []
+  return frames.length
+    ? frames.map(frame => (frame as chrome.webNavigation.GetAllFrameDetails & { frameId?: number }).frameId ?? 0)
+    : [0]
+}
+
 async function aggregateWithLlm(payload: {
   links: LinkItem[]
   context: { host: string; url: string }
@@ -198,6 +222,8 @@ const App = () => {
   const [ariaConfig, setAriaConfig] = useState<Aria2Config>({
     endpoint: DEFAULT_ARIA2_ENDPOINT
   })
+  const [templates, setTemplates] = useState<TemplateDefinition[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [includeFilter, setIncludeFilter] = useState('')
   const [excludeFilter, setExcludeFilter] = useState('')
   const [sortBy, setSortBy] = useState<'none' | 'title-asc' | 'title-desc'>('none')
@@ -233,8 +259,14 @@ const App = () => {
       return
     }
 
-    getAria2Config()
-      .then(config => setAriaConfig(config))
+    Promise.all([getAria2Config(), getTemplates()])
+      .then(([config, storedTemplates]) => {
+        setAriaConfig(config)
+        setTemplates(storedTemplates)
+        if (storedTemplates.length) {
+          setSelectedTemplateId(storedTemplates[0].id)
+        }
+      })
       .catch(error => setStatus({ kind: 'error', text: error.message }))
   }, [])
 
@@ -393,6 +425,104 @@ const App = () => {
     }
   }
 
+  const applyTemplateFromPopup = useCallback(async () => {
+    const template = templates.find(item => item.id === selectedTemplateId)
+    if (!template) {
+      setStatus({ kind: 'error', text: '请先选择模板' })
+      return
+    }
+    setStatus({ kind: 'info', text: '正在应用模板…' })
+    try {
+      const tab = await queryActiveTab()
+      if (!isInjectableUrl(tab.url)) {
+        setStatus({
+          kind: 'error',
+          text: '当前页面无法注入（如 chrome://），请切换到普通网页后再试'
+        })
+        return
+      }
+      await injectScanner(tab.id)
+      const frameIds = await getFrameIds(tab.id)
+      const results = await Promise.allSettled(
+        frameIds.map(frameId =>
+          sendTabMessage<{ ok: boolean; error?: string }>(tab.id, frameId, {
+            type: APPLY_TEMPLATE_MESSAGE,
+            template
+          })
+        )
+      )
+      const okResult = results.find(
+        result => result.status === 'fulfilled' && result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (okResult?.value.ok) {
+        setStatus({ kind: 'success', text: '模板已应用到当前页面' })
+        return
+      }
+      const errorResult = results.find(
+        result => result.status === 'fulfilled' && !result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (errorResult?.value.error) {
+        throw new Error(errorResult.value.error)
+      }
+      const rejected = results.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined
+      if (rejected?.reason) {
+        throw rejected.reason
+      }
+      throw new Error('模板未能应用到当前页面')
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        text: error instanceof Error ? error.message : '应用模板失败'
+      })
+    }
+  }, [selectedTemplateId, templates])
+
+  const clearTemplateFromPopup = useCallback(async () => {
+    setStatus({ kind: 'info', text: '正在移除模板…' })
+    try {
+      const tab = await queryActiveTab()
+      if (!isInjectableUrl(tab.url)) {
+        setStatus({
+          kind: 'error',
+          text: '当前页面无法注入（如 chrome://），请切换到普通网页后再试'
+        })
+        return
+      }
+      await injectScanner(tab.id)
+      const frameIds = await getFrameIds(tab.id)
+      const results = await Promise.allSettled(
+        frameIds.map(frameId =>
+          sendTabMessage<{ ok: boolean; error?: string }>(tab.id, frameId, {
+            type: CLEAR_TEMPLATE_MESSAGE
+          })
+        )
+      )
+      const okResult = results.find(
+        result => result.status === 'fulfilled' && result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (okResult?.value.ok) {
+        setStatus({ kind: 'success', text: '已移除页面上的模板 UI' })
+        return
+      }
+      const errorResult = results.find(
+        result => result.status === 'fulfilled' && !result.value.ok
+      ) as PromiseFulfilledResult<{ ok: boolean; error?: string }> | undefined
+      if (errorResult?.value.error) {
+        throw new Error(errorResult.value.error)
+      }
+      const rejected = results.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined
+      if (rejected?.reason) {
+        throw rejected.reason
+      }
+      throw new Error('未能移除模板 UI')
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        text: error instanceof Error ? error.message : '移除模板失败'
+      })
+    }
+  }, [])
+
   const openSettingsPage = () => {
     if (chrome.runtime.openOptionsPage) {
       chrome.runtime.openOptionsPage()
@@ -458,6 +588,35 @@ const App = () => {
           显示 {filteredLinks.length} / 共 {rawLinks.length} 条，已选 {selectedLinks.length} 条（来源：
           {rawLinks[0]?.sourceHost ?? '—'}）
         </p>
+      </section>
+
+      <section className="actions">
+        <h2>模板应用</h2>
+        {templates.length === 0 ? (
+          <p className="empty">暂无模板，请先在设置页创建。</p>
+        ) : (
+          <>
+            <label className="template-select">
+              <span>模板</span>
+              <select
+                value={selectedTemplateId ?? ''}
+                onChange={event => setSelectedTemplateId(event.target.value)}
+              >
+                {templates.map(template => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="action-row">
+              <button onClick={applyTemplateFromPopup} disabled={!selectedTemplateId}>
+                应用模板
+              </button>
+              <button onClick={clearTemplateFromPopup}>移除模板 UI</button>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="filters">
