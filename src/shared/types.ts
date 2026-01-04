@@ -49,3 +49,33 @@ export interface TemplateDefinition {
   selectors: TemplateSelectors
 }
 
+export type SiteRuleMode = 'page' | 'row'
+
+export interface SiteRuleSelectors {
+  row?: string
+  link: string
+  title?: string
+}
+
+export interface SiteRuleDefinition {
+  id: string
+  name: string
+  enabled: boolean
+  mode: SiteRuleMode
+  match: TemplateMatch
+  selectors: SiteRuleSelectors
+}
+
+export type LlmProvider = 'openai-compatible'
+
+export interface LlmConfig {
+  enabled: boolean
+  provider: LlmProvider
+  baseUrl: string
+  model: string
+  apiKey?: string
+  temperature: number
+  maxItems: number
+  batchSize: number
+}
+

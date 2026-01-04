@@ -22,14 +22,14 @@
     "https://*.thepiratebay3.to/*",
     "https://*.piratebays.to/*"
   ],
-  "optional_host_permissions": [],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "web_accessible_resources": [
     {
-      "resources": ["content.js"],
+      "resources": ["content.js", "assets/*.js"],
       "matches": ["<all_urls>"]
     }
   ]

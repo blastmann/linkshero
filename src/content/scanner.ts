@@ -1,4 +1,8 @@
-import { dedupePirateBayLinks, isPirateBayHost, normalizeTitleValue } from './piratebay-helpers'
+import { APPLY_TEMPLATE_MESSAGE, CLEAR_TEMPLATE_MESSAGE, PUSH_MESSAGE, SCAN_MESSAGE } from '../shared/messages'
+import { DEFAULT_ARIA2_ENDPOINT, STORAGE_KEYS } from '../shared/constants'
+import type { Aria2Config, LinkItem, SiteRuleDefinition, TemplateDefinition } from '../shared/types'
+import { buildLinkItem, extractTitleFromAnchor, isElementVisible } from './scanner/extractors'
+import { resolveRule } from './scanner/rules'
 
 declare global {
   interface Window {
@@ -14,210 +18,88 @@ declare global {
   }
   ;(window as Window).__linksHeroContentLoaded = true
 
-  const SCAN_MESSAGE = 'links-hero/scan'
-  const APPLY_TEMPLATE_MESSAGE = 'links-hero/apply-template'
-  const CLEAR_TEMPLATE_MESSAGE = 'links-hero/clear-template'
-  const PUSH_MESSAGE = 'links-hero/push'
-  const DEFAULT_ARIA2_ENDPOINT = 'http://127.0.0.1:6800/jsonrpc'
-  const STORAGE_KEYS = {
-    aria2Config: 'linksHero.aria2Config'
-  } as const
-
-interface Aria2Config {
-  endpoint: string
-  token?: string
-  dir?: string
-}
-
-interface LinkItem {
-  id: string
-  url: string
-  title: string
-  sourceHost: string
-  selected?: boolean
-  normalizedTitle?: string
-  seeders?: number
-  leechers?: number
-}
-
-interface TemplateMatch {
-  hostSuffix?: string[]
-  pathRegex?: string
-}
-
-interface TemplateSelectors {
-  row: string
-  link: string
-  title?: string
-}
-
-interface TemplateDefinition {
-  id: string
-  name: string
-  match: TemplateMatch
-  selectors: TemplateSelectors
-}
-
-const defaultConfig: Aria2Config = {
-  endpoint: DEFAULT_ARIA2_ENDPOINT
-}
-
-async function getAria2Config(): Promise<Aria2Config> {
-  if (!chrome?.storage?.sync) {
-    return defaultConfig
+  const defaultConfig: Aria2Config = {
+    endpoint: DEFAULT_ARIA2_ENDPOINT
   }
 
-  return new Promise<Aria2Config>((resolve, reject) => {
-    chrome.storage.sync.get([STORAGE_KEYS.aria2Config], result => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message))
-        return
-      }
+  async function getAria2Config(): Promise<Aria2Config> {
+    if (!chrome?.storage?.sync) {
+      return defaultConfig
+    }
 
-      const stored = (result[STORAGE_KEYS.aria2Config] as Aria2Config | undefined) ?? defaultConfig
+    return new Promise<Aria2Config>((resolve, reject) => {
+      chrome.storage.sync.get([STORAGE_KEYS.aria2Config], result => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+          return
+        }
 
-      resolve({
-        endpoint: stored.endpoint?.trim() || defaultConfig.endpoint,
-        token: stored.token?.trim(),
-        dir: stored.dir?.trim()
+        const stored = (result[STORAGE_KEYS.aria2Config] as Aria2Config | undefined) ?? defaultConfig
+
+        resolve({
+          endpoint: stored.endpoint?.trim() || defaultConfig.endpoint,
+          token: stored.token?.trim(),
+          dir: stored.dir?.trim()
+        })
       })
     })
-  })
-}
+  }
 
-  const SCAN_FLAG = '__linksHeroScannerInjected'
+const SCAN_FLAG = '__linksHeroScannerInjected'
 const STYLE_ID = 'links-hero-style'
 
-const LINK_SELECTORS = 'a[href^="magnet:"],a[href$=".torrent"]'
-function logDebug(...args: unknown[]) {
-  if (typeof console !== 'undefined') {
-    console.debug('[Links Hero]', ...args)
+const DEBUG_SERVER_ENDPOINT = 'http://127.0.0.1:7242/ingest/f6fbaedc-b261-4d72-b001-4bf343b73dda'
+const DEBUG_SESSION_ID = 'debug-session'
+const DEBUG_RUN_ID = `pre-fix-${Date.now()}`
+
+function emitDebugLog(hypothesisId: string, location: string, message: string, data: Record<string, unknown>) {
+  if (typeof fetch !== 'function') {
+    return
   }
+  const payload = {
+    sessionId: DEBUG_SESSION_ID,
+    runId: DEBUG_RUN_ID,
+    hypothesisId,
+    location,
+    message,
+    data,
+    timestamp: Date.now()
+  }
+  // #region agent log
+  fetch(DEBUG_SERVER_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {})
+  // #endregion
 }
 
-
-interface RowState {
-  element: HTMLElement
-  checkbox: HTMLInputElement
-  links: LinkItem[]
-  index: number
-}
-
-interface TemplateRuntime {
-  template: TemplateDefinition
-  rows: RowState[]
-  selected: Set<string>
-  toolbar: HTMLDivElement
-  links: LinkItem[]
-  lastIndex: number | null
-  toast?: HTMLDivElement
-}
-
-let templateRuntime: TemplateRuntime | null = null
-let fallbackToast: HTMLDivElement | null = null
-let toastTimer: number | null = null
-
-function isElementVisible(element: Element | null): boolean {
-  if (!element || !(element instanceof HTMLElement)) {
-    return false
-  }
-
-  const style = window.getComputedStyle(element)
-  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-    return false
-  }
-
-  const rect = element.getBoundingClientRect()
-  return rect.width > 0 && rect.height > 0
-}
-
-function generateId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random()}`
-}
-
-function getMagnetDisplayName(href: string): string | null {
-  if (!href.startsWith('magnet:')) {
-    return null
-  }
-  try {
-    const magnetUrl = new URL(href)
-    const dn = magnetUrl.searchParams.get('dn')
-    return dn ? decodeURIComponent(dn) : null
-  } catch {
-    return null
-  }
-}
-
-function extractPirateDisplayTitle(anchor: HTMLAnchorElement): string | null {
-  const row = anchor.closest('tr')
-  if (!row) {
-    return null
-  }
-  const detName = row.querySelector('.detName a')
-  const text = detName?.textContent?.trim()
-  if (text) {
-    return text
-  }
-  return null
-}
-
-function extractTitle(anchor: HTMLAnchorElement): string {
-  if (isPirateBayHost()) {
-    const magnetName = getMagnetDisplayName(anchor.href)
-    if (magnetName) {
-      return magnetName
-    }
-    const pirateName = extractPirateDisplayTitle(anchor)
-    if (pirateName) {
-      return pirateName
-    }
-  } else {
-    const magnetName = getMagnetDisplayName(anchor.href)
-    if (magnetName) {
-      return magnetName
+  function logDebug(...args: unknown[]) {
+    if (typeof console !== 'undefined') {
+      console.debug('[Links Hero]', ...args)
     }
   }
 
-  const text = anchor.textContent?.trim()
-  if (text) {
-    return text
+  interface RowState {
+    element: HTMLElement
+    checkbox: HTMLInputElement
+    links: LinkItem[]
+    index: number
   }
 
-  const parentText = anchor.closest('tr, li, div')?.textContent?.trim()
-  if (parentText) {
-    return parentText.replace(/\s+/g, ' ')
+  interface TemplateRuntime {
+    template: TemplateDefinition
+    rows: RowState[]
+    selected: Set<string>
+    toolbar: HTMLDivElement
+    links: LinkItem[]
+    lastIndex: number | null
+    toast?: HTMLDivElement
   }
 
-  return anchor.href
-}
-
-function extractPirateBayStats(anchor: HTMLAnchorElement): { seeders?: number; leechers?: number } {
-  const row = anchor.closest('tr, li.list-entry')
-  if (!row) {
-    return {}
-  }
-
-  const parseValue = (selectors: string[]) => {
-    for (const selector of selectors) {
-      const cell = row.querySelector<HTMLElement>(selector)
-      if (!cell) {
-        continue
-      }
-      const value = parseInt(cell.textContent?.trim() ?? '', 10)
-      if (Number.isFinite(value)) {
-        return value
-      }
-    }
-    return undefined
-  }
-
-  const seeders = parseValue(['.item-seed', 'td:nth-of-type(4)', 'td[align="right"]:nth-of-type(1)'])
-  const leechers = parseValue(['.item-leech', 'td:nth-of-type(5)', 'td[align="right"]:nth-of-type(2)'])
-
-  return { seeders, leechers }
-}
+  let templateRuntime: TemplateRuntime | null = null
+  let fallbackToast: HTMLDivElement | null = null
+  let toastTimer: number | null = null
 
 function ensureStyles() {
   if (document.getElementById(STYLE_ID)) {
@@ -343,18 +225,12 @@ function buildTemplateRows(template: TemplateDefinition): { rows: RowState[]; li
       }
 
       if (!dedupe.has(href)) {
-        const title = template.selectors.title
-          ? element.querySelector<HTMLElement>(template.selectors.title)?.textContent?.trim() ??
-            extractTitle(anchor)
-          : extractTitle(anchor)
+        const rowTitle = template.selectors.title
+          ? element.querySelector<HTMLElement>(template.selectors.title)?.textContent?.trim() ?? null
+          : null
+        const title = extractTitleFromAnchor(anchor, { rowTitle })
 
-        dedupe.set(href, {
-          id: generateId(),
-          url: href,
-          title,
-          sourceHost,
-          normalizedTitle: normalizeTitleValue(title)
-        })
+        dedupe.set(href, buildLinkItem(href, title, sourceHost))
       }
 
       const link = dedupe.get(href)
@@ -467,6 +343,10 @@ function handleRowInteraction(row: RowState, shiftKey: boolean) {
 }
 
 function sendPushRequest(links: LinkItem[], config: Awaited<ReturnType<typeof getAria2Config>>) {
+  emitDebugLog('H7', 'src/content/scanner.ts:319', 'push:request:start', {
+    linkCount: links.length,
+    endpoint: config.endpoint
+  })
   return new Promise<void>((resolve, reject) => {
     chrome.runtime.sendMessage(
       {
@@ -479,13 +359,22 @@ function sendPushRequest(links: LinkItem[], config: Awaited<ReturnType<typeof ge
       response => {
         const err = chrome.runtime.lastError
         if (err) {
+          emitDebugLog('H8', 'src/content/scanner.ts:333', 'push:request:error', {
+            message: err.message
+          })
           reject(new Error(err.message))
           return
         }
         if (!response?.ok) {
+          emitDebugLog('H8', 'src/content/scanner.ts:336', 'push:request:error', {
+            message: response?.error ?? 'unknown'
+          })
           reject(new Error(response?.error ?? '推送失败'))
           return
         }
+        emitDebugLog('H8', 'src/content/scanner.ts:339', 'push:request:success', {
+          linkCount: links.length
+        })
         resolve()
       }
     )
@@ -547,6 +436,11 @@ function createToolbar(): HTMLDivElement {
 }
 
 function applyTemplate(template: TemplateDefinition) {
+  emitDebugLog('H5', 'src/content/scanner.ts:400', 'template:apply:start', {
+    templateId: template.id,
+    host: window.location.hostname,
+    path: window.location.pathname
+  })
   if (!matchTemplate(template)) {
     showToast('模板与当前页面不匹配')
     throw new Error('模板与当前页面不匹配')
@@ -556,6 +450,11 @@ function applyTemplate(template: TemplateDefinition) {
   ensureStyles()
 
   const { rows, links } = buildTemplateRows(template)
+  emitDebugLog('H6', 'src/content/scanner.ts:408', 'template:apply:buildRows', {
+    templateId: template.id,
+    rowCount: rows.length,
+    linkCount: links.length
+  })
   if (!rows.length) {
     showToast('模板未命中任何行')
     throw new Error('模板未命中任何行')
@@ -597,54 +496,21 @@ function teardownTemplate() {
   templateRuntime = null
 }
 
-function scanDefaultLinks(): LinkItem[] {
-  const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>(LINK_SELECTORS))
-  const sourceHost = window.location.hostname
-  const dedupe = new Map<string, LinkItem>()
-  logDebug('scanDefaultLinks:start', { sourceHost, anchorCount: anchors.length })
+function scanDefaultLinks(rules: SiteRuleDefinition[] = []): LinkItem[] {
+  const context = { host: window.location.hostname, url: window.location.href }
+  const rule = resolveRule(context, rules)
+  logDebug('scanDefaultLinks:start', { sourceHost: context.host, rule: rule.id })
 
-  anchors.forEach(anchor => {
-    if (!isElementVisible(anchor)) {
-      return
-    }
-
-    const href = anchor.href
-    if (!href) {
-      return
-    }
-
-    if (!dedupe.has(href)) {
-      const title = extractTitle(anchor)
-      const baseLink: LinkItem = {
-        id: generateId(),
-        url: href,
-        title,
-        sourceHost,
-        normalizedTitle: normalizeTitleValue(title)
-      }
-
-      if (isPirateBayHost(sourceHost)) {
-        const stats = extractPirateBayStats(anchor)
-        baseLink.seeders = stats.seeders
-        baseLink.leechers = stats.leechers
-      }
-
-      dedupe.set(href, baseLink)
-    }
-  })
-
-  let links = Array.from(dedupe.values())
-  if (isPirateBayHost(sourceHost)) {
-    logDebug('piratebay:before-dedupe', links.map(link => link.title))
-    links = dedupePirateBayLinks(links)
-    logDebug('piratebay:after-dedupe', links.map(link => ({ title: link.title, normalized: link.normalizedTitle, seeders: link.seeders, leechers: link.leechers })))
+  let links = rule.scan(document, context)
+  if (rule.aggregate) {
+    links = rule.aggregate(links)
   }
 
-  logDebug('scanDefaultLinks:end', { uniqueCount: links.length })
+  logDebug('scanDefaultLinks:end', { uniqueCount: links.length, rule: rule.id })
   return links
 }
 
-function scanLinks(): LinkItem[] {
+function scanLinks(rules: SiteRuleDefinition[] = []): LinkItem[] {
   if (templateRuntime) {
     return templateRuntime.links.map(link => ({
       ...link,
@@ -652,14 +518,14 @@ function scanLinks(): LinkItem[] {
     }))
   }
 
-  return scanDefaultLinks()
+  return scanDefaultLinks(rules)
 }
 
 function setupListener() {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === SCAN_MESSAGE) {
       try {
-        const links = scanLinks()
+        const links = scanLinks((message as { rules?: SiteRuleDefinition[] }).rules ?? [])
         sendResponse({ success: true, links })
       } catch (error) {
         sendResponse({

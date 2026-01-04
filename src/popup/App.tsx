@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
-import { SCAN_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
+import { LLM_AGGREGATE_MESSAGE, SCAN_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
+import { getLlmConfig } from '../shared/llm-config'
+import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
-import type { Aria2Config, LinkItem, PushOutcome, ScanResponse } from '../shared/types'
+import type { Aria2Config, LinkItem, PushOutcome, ScanResponse, SiteRuleDefinition } from '../shared/types'
 
 type LinkWithSelection = LinkItem & { selected: boolean }
 
@@ -67,7 +69,11 @@ async function injectScanner(tabId: number, frameIds?: number[]): Promise<void> 
         target,
         world: 'ISOLATED',
         injectImmediately: true,
-        files: ['content.js']
+        func: async () => {
+          const url = chrome.runtime.getURL('content.js')
+          await import(url)
+          return true
+        }
       },
       () => {
         const err = chrome.runtime.lastError
@@ -88,9 +94,13 @@ function getErrorMessage(error: unknown): string {
   return String(error)
 }
 
-async function sendScanMessage(tabId: number, frameId: number): Promise<ScanResponse> {
+async function sendScanMessage(
+  tabId: number,
+  frameId: number,
+  rules: SiteRuleDefinition[]
+): Promise<ScanResponse> {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type: SCAN_MESSAGE }, { frameId }, response => {
+    chrome.tabs.sendMessage(tabId, { type: SCAN_MESSAGE, rules }, { frameId }, response => {
       const err = chrome.runtime.lastError
       if (err) {
         reject(new Error(err.message))
@@ -101,7 +111,7 @@ async function sendScanMessage(tabId: number, frameId: number): Promise<ScanResp
   })
 }
 
-async function requestScan(tabId: number): Promise<LinkItem[]> {
+async function requestScan(tabId: number, rules: SiteRuleDefinition[]): Promise<LinkItem[]> {
   const framesResult = await chrome.webNavigation
     .getAllFrames({ tabId })
     .catch(() => undefined as chrome.webNavigation.GetAllFrameDetails[] | undefined)
@@ -112,11 +122,11 @@ async function requestScan(tabId: number): Promise<LinkItem[]> {
 
   const results = await Promise.allSettled(
     targets.map(frameId =>
-      sendScanMessage(tabId, frameId).catch(async error => {
+      sendScanMessage(tabId, frameId, rules).catch(async error => {
         const message = getErrorMessage(error)
         if (message.includes('Receiving end does not exist')) {
           await injectScanner(tabId, [frameId])
-          return sendScanMessage(tabId, frameId)
+          return sendScanMessage(tabId, frameId, rules)
         }
         throw error
       })
@@ -156,6 +166,22 @@ async function pushToBackground(payload: { links: LinkItem[]; config: Aria2Confi
         return
       }
       resolve(response as { ok: boolean; result?: PushOutcome; error?: string })
+    })
+  })
+}
+
+async function aggregateWithLlm(payload: {
+  links: LinkItem[]
+  context: { host: string; url: string }
+}): Promise<{ ok: boolean; links?: LinkItem[]; error?: string }> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: LLM_AGGREGATE_MESSAGE, payload }, response => {
+      const err = chrome.runtime.lastError
+      if (err) {
+        reject(new Error(err.message))
+        return
+      }
+      resolve(response as { ok: boolean; links?: LinkItem[]; error?: string })
     })
   })
 }
@@ -221,7 +247,11 @@ const App = () => {
     setStatus({ kind: 'info', text: '正在扫描当前页面…' })
 
     try {
-      const tab = await queryActiveTab()
+      const [tab, siteRules, llmConfig] = await Promise.all([
+        queryActiveTab(),
+        getSiteRules().catch(() => []),
+        getLlmConfig().catch(() => null)
+      ])
       if (!isInjectableUrl(tab.url)) {
         setStatus({
           kind: 'error',
@@ -230,9 +260,29 @@ const App = () => {
         return
       }
       await injectScanner(tab.id)
-      const responseLinks = await requestScan(tab.id)
+      let responseLinks = await requestScan(tab.id, siteRules)
       if (!responseLinks.length) {
         throw new Error('未能在页面中找到可用链接')
+      }
+
+      if (llmConfig?.enabled && llmConfig.baseUrl && llmConfig.model) {
+        try {
+          setStatus({ kind: 'info', text: '正在进行 LLM 聚合…' })
+          const targetUrl = tab.url ?? ''
+          const host = targetUrl ? new URL(targetUrl).hostname : ''
+          const aggregateResponse = await aggregateWithLlm({
+            links: responseLinks,
+            context: { host, url: targetUrl }
+          })
+          if (!aggregateResponse.ok) {
+            throw new Error(aggregateResponse.error ?? 'LLM 聚合失败')
+          }
+          if (aggregateResponse.links?.length) {
+            responseLinks = aggregateResponse.links
+          }
+        } catch {
+          setStatus({ kind: 'info', text: 'LLM 聚合失败，已回退为原始结果' })
+        }
       }
 
       const next = responseLinks.map(link => ({
