@@ -3,6 +3,7 @@ import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config, saveAria2Config } from '../shared/storage'
 import type { Aria2Config, SiteRuleDefinition } from '../shared/types'
+import { IconGear, IconList } from '../shared/icons'
 
 type Status = { kind: 'success' | 'error' | 'info'; text: string } | null
 
@@ -58,7 +59,10 @@ const App = () => {
     <div className="options-page">
       <header>
         <div>
-          <h1>Links Hero 设置</h1>
+          <h1 className="title">
+            <IconGear className="title-icon" />
+            Links Hero 设置
+          </h1>
           <p>管理 aria2 配置。</p>
         </div>
       </header>
@@ -68,7 +72,10 @@ const App = () => {
       ) : (
         <>
           <section>
-            <h2>aria2 配置</h2>
+            <h2 className="section-title">
+              <IconGear className="section-icon" />
+              aria2 配置
+            </h2>
             <label>
               RPC 地址
               <input
@@ -99,7 +106,10 @@ const App = () => {
           </section>
 
           <section>
-            <h2>站点规则（用于扫描）</h2>
+            <h2 className="section-title">
+              <IconList className="section-icon" />
+              站点规则（用于扫描）
+            </h2>
             {siteRules.length === 0 ? (
               <p>暂无站点规则，将使用通用扫描规则。</p>
             ) : (

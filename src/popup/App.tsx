@@ -4,6 +4,11 @@ import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
 import { injectScanner, isInjectableUrl, queryActiveTab, requestScan } from '../shared/scan-trigger'
+import { getLinkKind, type LinkKind } from '../shared/link-kind'
+import { KeywordTagInput } from '../shared/KeywordTagInput'
+import { addKeywords, splitKeywords } from '../shared/keyword-tags'
+import { IconBolt, IconFilter, IconList, IconWand } from '../shared/icons'
+import { ToastViewport, useToasts } from '../shared/toast'
 import type { Aria2Config, LinkItem, PushOutcome } from '../shared/types'
 
 type LinkWithSelection = LinkItem & { selected: boolean }
@@ -15,15 +20,6 @@ type Status =
   | null
 
 const chromeReady = typeof chrome !== 'undefined' && !!chrome.tabs
-const KEYWORD_SPLIT_REGEX = /[,，]/
-
-function parseKeywords(value: string): string[] {
-  return value
-    .split(KEYWORD_SPLIT_REGEX)
-    .map(item => item.trim().toLowerCase())
-    .filter(Boolean)
-}
-
 function buildSearchText(link: LinkItem): string {
   return `${link.title ?? ''} ${link.url ?? ''} ${link.sourceHost ?? ''} ${link.normalizedTitle ?? ''}`.toLowerCase()
 }
@@ -53,6 +49,7 @@ function formatLinksText(links: LinkItem[]) {
 }
 
 const App = () => {
+  const toast = useToasts()
   const [rawLinks, setRawLinks] = useState<LinkWithSelection[]>([])
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<Status>(null)
@@ -60,17 +57,20 @@ const App = () => {
   const [ariaConfig, setAriaConfig] = useState<Aria2Config>({
     endpoint: DEFAULT_ARIA2_ENDPOINT
   })
-  const [includeFilter, setIncludeFilter] = useState('')
-  const [excludeFilter, setExcludeFilter] = useState('')
+  const [includeTags, setIncludeTags] = useState<string[]>([])
+  const [excludeTags, setExcludeTags] = useState<string[]>([])
+  const [includeDraft, setIncludeDraft] = useState('')
+  const [excludeDraft, setExcludeDraft] = useState('')
   const [sortBy, setSortBy] = useState<'none' | 'title-asc' | 'title-desc'>('none')
+  const [kindFilters, setKindFilters] = useState<LinkKind[]>([])
 
   const selectedLinks = useMemo(() => rawLinks.filter(link => link.selected), [rawLinks])
 
   const filteredLinks = useMemo(() => {
     let result = [...rawLinks]
 
-    const includes = parseKeywords(includeFilter)
-    const excludes = parseKeywords(excludeFilter)
+    const includes = [...includeTags, ...splitKeywords(includeDraft)]
+    const excludes = [...excludeTags, ...splitKeywords(excludeDraft)]
 
     if (includes.length) {
       result = result.filter(link => matchesAnyKeyword(buildSearchText(link), includes))
@@ -80,6 +80,11 @@ const App = () => {
       result = result.filter(link => !matchesAnyKeyword(buildSearchText(link), excludes))
     }
 
+    if (kindFilters.length) {
+      const allowed = new Set(kindFilters)
+      result = result.filter(link => allowed.has(getLinkKind(link.url)))
+    }
+
     if (sortBy === 'title-asc') {
       result = [...result].sort((a, b) => a.title.localeCompare(b.title))
     } else if (sortBy === 'title-desc') {
@@ -87,7 +92,15 @@ const App = () => {
     }
 
     return result
-  }, [rawLinks, includeFilter, excludeFilter, sortBy])
+  }, [rawLinks, includeTags, excludeTags, includeDraft, excludeDraft, sortBy, kindFilters])
+
+  const kindCounts = useMemo(() => {
+    const counts: Record<LinkKind, number> = { magnet: 0, torrent: 0, http: 0, other: 0 }
+    rawLinks.forEach(link => {
+      counts[getLinkKind(link.url)] += 1
+    })
+    return counts
+  }, [rawLinks])
 
   useEffect(() => {
     if (!chromeReady) {
@@ -134,11 +147,13 @@ const App = () => {
       }))
       setRawLinks(next)
       setStatus({ kind: 'success', text: `扫描完成，共 ${next.length} 条链接` })
+      toast.success(`扫描完成：${next.length} 条`)
     } catch (error) {
       setStatus({
         kind: 'error',
         text: error instanceof Error ? error.message : '未知错误'
       })
+      toast.error(error instanceof Error ? error.message : '扫描失败')
     } finally {
       setLoading(false)
     }
@@ -176,11 +191,13 @@ const App = () => {
     try {
       await navigator.clipboard.writeText(text)
       setStatus({ kind: 'success', text: `已复制 ${selectedLinks.length} 条链接` })
+      toast.success(`已复制 ${selectedLinks.length} 条`)
     } catch (error) {
       setStatus({
         kind: 'error',
         text: error instanceof Error ? error.message : '复制失败'
       })
+      toast.error(error instanceof Error ? error.message : '复制失败')
     }
   }
 
@@ -197,6 +214,7 @@ const App = () => {
     anchor.click()
     URL.revokeObjectURL(url)
     setStatus({ kind: 'success', text: '已导出所选链接' })
+    toast.success('已导出 .txt')
   }
 
   const handlePush = async () => {
@@ -222,17 +240,20 @@ const App = () => {
           kind: 'error',
           text: `成功 ${succeeded} 条，失败 ${failed.length} 条`
         })
+        toast.error(`推送失败 ${failed.length} 条（成功 ${succeeded}）`)
       } else {
         setStatus({
           kind: 'success',
           text: `已成功推送 ${succeeded} 条链接`
         })
+        toast.success(`推送成功：${succeeded} 条`)
       }
     } catch (error) {
       setStatus({
         kind: 'error',
         text: error instanceof Error ? error.message : '推送失败'
       })
+      toast.error(error instanceof Error ? error.message : '推送失败')
     }
   }
 
@@ -247,9 +268,13 @@ const App = () => {
 
   return (
     <div className="popup">
+      <ToastViewport toasts={toast.toasts} onDismiss={toast.dismiss} />
       <header className="header">
         <div>
-          <h1>Links Hero</h1>
+          <h1 className="title">
+            <IconWand className="title-icon" />
+            Links Hero
+          </h1>
           <p className="subhead">
             {loading ? '正在扫描…' : `已捕获 ${rawLinks.length} 条链接`}
             {ariaConfig.endpoint ? ` · aria2: ${ariaConfig.endpoint}` : ''}
@@ -279,7 +304,10 @@ const App = () => {
       </header>
 
       <section className="actions">
-        <h2>批量操作</h2>
+        <h2 className="section-title">
+          <IconBolt className="section-icon" />
+          批量操作
+        </h2>
         <div className="action-row">
           <button onClick={() => toggleAll(true)} disabled={!filteredLinks.length}>
             全选
@@ -304,37 +332,89 @@ const App = () => {
       </section>
 
       <section className="filters">
-        <h2>快速过滤</h2>
-        <label>
-          包含关键词（逗号分隔）
-          <input
-            type="text"
-            value={includeFilter}
-            onChange={event => setIncludeFilter(event.target.value)}
-          />
-        </label>
-        <label>
-          排除关键词（逗号分隔）
-          <input
-            type="text"
-            value={excludeFilter}
-            onChange={event => setExcludeFilter(event.target.value)}
-          />
-        </label>
+        <h2 className="section-title">
+          <IconFilter className="section-icon" />
+          快速过滤
+        </h2>
+        <div className="chips" role="group" aria-label="快捷筛选">
+          {(
+            [
+              { kind: 'magnet', label: '磁链' },
+              { kind: 'torrent', label: '种子' },
+              { kind: 'http', label: '直链' }
+            ] as const
+          ).map(item => {
+            const active = kindFilters.includes(item.kind)
+            return (
+              <button
+                key={item.kind}
+                type="button"
+                className={`chip ${active ? 'active' : ''}`}
+                onClick={() => {
+                  setKindFilters(prev =>
+                    prev.includes(item.kind) ? prev.filter(k => k !== item.kind) : [...prev, item.kind]
+                  )
+                }}
+                aria-pressed={active}
+                title={`${item.label}：${kindCounts[item.kind]} 条`}
+              >
+                {item.label}
+                <span className="chip-count">{kindCounts[item.kind]}</span>
+              </button>
+            )
+          })}
+          <span className="chips-meta">
+            命中 {filteredLinks.length} / {rawLinks.length}
+          </span>
+        </div>
+        <KeywordTagInput
+          label="包含关键词"
+          placeholder="输入后按 Enter"
+          tags={includeTags}
+          value={includeDraft}
+          onChangeTags={setIncludeTags}
+          onChangeValue={value => {
+            if (value.includes(',') || value.includes('，')) {
+              setIncludeTags(prev => addKeywords(prev, value))
+              setIncludeDraft('')
+              return
+            }
+            setIncludeDraft(value)
+          }}
+        />
+        <KeywordTagInput
+          label="排除关键词"
+          placeholder="输入后按 Enter"
+          tags={excludeTags}
+          value={excludeDraft}
+          onChangeTags={setExcludeTags}
+          onChangeValue={value => {
+            if (value.includes(',') || value.includes('，')) {
+              setExcludeTags(prev => addKeywords(prev, value))
+              setExcludeDraft('')
+              return
+            }
+            setExcludeDraft(value)
+          }}
+        />
         <div className="filter-row">
-          <label>
-            排序
+          <div className="field">
+            <span className="field-label">排序</span>
             <select value={sortBy} onChange={event => setSortBy(event.target.value as typeof sortBy)}>
               <option value="none">默认</option>
               <option value="title-asc">标题 A→Z</option>
               <option value="title-desc">标题 Z→A</option>
             </select>
-          </label>
+          </div>
           <button
+            className="secondary"
             onClick={() => {
-              setIncludeFilter('')
-              setExcludeFilter('')
+              setIncludeTags([])
+              setExcludeTags([])
+              setIncludeDraft('')
+              setExcludeDraft('')
               setSortBy('none')
+              setKindFilters([])
             }}
           >
             清空过滤
@@ -343,7 +423,10 @@ const App = () => {
       </section>
 
       <section className="list">
-        <h2>链接列表</h2>
+        <h2 className="section-title">
+          <IconList className="section-icon" />
+          链接列表
+        </h2>
         {filteredLinks.length === 0 ? (
           <p className="empty">
             {rawLinks.length === 0 ? '暂无数据，点击“扫描当前页”开始。' : '过滤条件下没有匹配结果。'}

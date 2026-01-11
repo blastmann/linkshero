@@ -19,7 +19,7 @@ header {
 
 section {
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 20px;
   box-shadow: var(--shadow);
@@ -30,6 +30,26 @@ h1,
 h2,
 h3 {
   margin: 0 0 12px;
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-icon {
+  color: var(--primary);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-icon {
+  color: var(--muted);
 }
 
 label {
@@ -43,7 +63,7 @@ label {
 input {
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
 }
@@ -56,7 +76,7 @@ input:focus-visible {
 select {
   padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
 }
@@ -68,7 +88,7 @@ select:focus-visible {
 
 button {
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 8px 14px;
   font-weight: 600;
   background: var(--primary);
