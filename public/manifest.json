@@ -3,9 +3,21 @@
   "name": "Links Hero",
   "description": "扫描当前页面的下载链接并推送到 aria2",
   "version": "0.1.0",
+  "icons": {
+    "16": "icons/16x16.png",
+    "32": "icons/32x32.png",
+    "48": "icons/48x48.png",
+    "128": "icons/128x128.png"
+  },
   "action": {
     "default_title": "Links Hero",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16x16.png",
+      "32": "icons/32x32.png",
+      "48": "icons/48x48.png",
+      "128": "icons/128x128.png"
+    }
   },
   "options_page": "options.html",
   "permissions": [
@@ -28,8 +40,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["content.js", "assets/*.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "content.js",
+        "assets/*.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
