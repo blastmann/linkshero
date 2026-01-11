@@ -115,6 +115,65 @@ const App = () => {
       .catch(error => setStatus({ kind: 'error', text: error.message }))
   }, [])
 
+  useEffect(() => {
+    if (!chromeReady) {
+      return
+    }
+
+    const isDevtoolsLikelyOpen = () => {
+      // Heuristic: DevTools docked changes window outer/inner sizes.
+      // (Undocked devtools won't affect this, but also typically doesn't trigger the same blur behavior.)
+      const widthGap = Math.abs(window.outerWidth - window.innerWidth)
+      const heightGap = Math.abs(window.outerHeight - window.innerHeight)
+      return widthGap > 140 || heightGap > 140
+    }
+
+    const closePopup = () => {
+      try {
+        window.close()
+      } catch {
+        // ignore
+      }
+    }
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        closePopup()
+      }
+    }
+
+    const handleBlur = () => {
+      // Defer to allow Chrome to update focus/visibility state.
+      window.setTimeout(() => {
+        if (document.hidden) {
+          closePopup()
+          return
+        }
+
+        // If DevTools is opening/docked, blur can happen but popup should stay.
+        if (!document.hasFocus() && !isDevtoolsLikelyOpen()) {
+          closePopup()
+        }
+      }, 0)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closePopup()
+      }
+    }
+
+    window.addEventListener('blur', handleBlur)
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('blur', handleBlur)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
   const handleScan = useCallback(async () => {
     if (!chromeReady) {
       return
