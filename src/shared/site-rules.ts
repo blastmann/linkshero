@@ -27,9 +27,13 @@ const presetRules: SiteRuleDefinition[] = [
       pathRegex: '^/'
     },
     selectors: {
-      row: 'table tbody tr, .table tbody tr',
-      link: 'a[href^="magnet:"],a[href$=".torrent"]',
-      title: 'td.title a, td:nth-child(3) a, a[href$=".torrent"]'
+      row: '#topic_list tbody tr',
+      link: 'a.download-arrow.arrow-magnet[href^="magnet:"]',
+      // 注意：td.title 里第一个 <a> 通常是字幕组/团队链接；这里要精确选资源标题链接
+      title: 'td.title > a[href^="/topics/view/"]',
+      // 列顺序：日期/分类/标题/磁链/大小/種子/下載/完成/發佈人
+      size: 'td:nth-child(5)',
+      seeders: 'td:nth-child(6)'
     }
   },
   {
@@ -42,9 +46,11 @@ const presetRules: SiteRuleDefinition[] = [
       pathRegex: '^/'
     },
     selectors: {
-      row: 'table tbody tr, .table tbody tr',
-      link: 'a[href^="magnet:"],a[href$=".torrent"]',
-      title: 'td.title a, td:nth-child(3) a, a[href$=".torrent"]'
+      row: '#topic_list tbody tr',
+      link: 'a.download-arrow.arrow-magnet[href^="magnet:"]',
+      title: 'td.title > a[href^="/topics/view/"]',
+      size: 'td:nth-child(5)',
+      seeders: 'td:nth-child(6)'
     }
   },
   {

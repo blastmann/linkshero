@@ -206,3 +206,50 @@ describe('site rules follow (list page -> detail pages)', () => {
   })
 })
 
+describe('dmhy-style table row scan', () => {
+  it('extracts title from topics/view anchor and size/seeders from fixed columns', () => {
+    const rule: SiteRuleDefinition = {
+      id: 'dmhy',
+      name: 'DMHY',
+      enabled: true,
+      mode: 'row',
+      match: { hostSuffix: ['dmhy.org'] },
+      selectors: {
+        row: '#topic_list tbody tr',
+        link: 'a.download-arrow.arrow-magnet[href^="magnet:"]',
+        title: 'td.title > a[href^="/topics/view/"]',
+        size: 'td:nth-child(5)',
+        seeders: 'td:nth-child(6)'
+      }
+    }
+
+    const doc = createDoc(`
+      <table id="topic_list">
+        <tbody>
+          <tr>
+            <td>今天</td>
+            <td>動畫</td>
+            <td class="title">
+              <span class="tag"><a href="/topics/list/team_id/1">TeamName</a></span>
+              <a href="/topics/view/710000_foo.html" target="_blank">Real Title</a>
+            </td>
+            <td align="center">
+              <a class="download-arrow arrow-magnet" href="magnet:?xt=urn:btih:aaa&dn=Real%20Title">m</a>
+            </td>
+            <td align="center">520.4MB</td>
+            <td align="center"><span class="btl_1">12</span></td>
+            <td align="center"><span class="bts_1">999</span></td>
+            <td align="center">-</td>
+            <td>uploader</td>
+          </tr>
+        </tbody>
+      </table>
+    `)
+
+    const links = scanByRuleDefinition(doc, { host: 'dmhy.org', url: 'https://dmhy.org/' }, rule)
+    expect(links).toHaveLength(1)
+    expect(links[0].title).toBe('Real Title')
+    expect(links[0].size).toBe('520.4MB')
+    expect(links[0].seeders).toBe(12)
+  })
+})
