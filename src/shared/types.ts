@@ -37,19 +37,6 @@ export interface TemplateMatch {
   pathRegex?: string
 }
 
-export interface TemplateSelectors {
-  row: string
-  link: string
-  title?: string
-}
-
-export interface TemplateDefinition {
-  id: string
-  name: string
-  match: TemplateMatch
-  selectors: TemplateSelectors
-}
-
 export type SiteRuleMode = 'page' | 'row'
 
 export interface SiteRuleSelectors {

@@ -233,7 +233,9 @@ export async function getSiteRules(): Promise<SiteRuleDefinition[]> {
             reject(new Error(chrome.runtime.lastError.message))
             return
           }
-          resolve((result[STORAGE_KEYS.siteRules] as SiteRuleDefinition[]) ?? [])
+          const stored = (result[STORAGE_KEYS.siteRules] as SiteRuleDefinition[]) ?? []
+          // 零配置：如果用户未配置任何站点规则，则自动启用内置规则。
+          resolve(stored.length ? stored : getPresetSiteRules())
         })
       })
   )
