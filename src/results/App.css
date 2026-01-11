@@ -1,20 +1,20 @@
 body {
   margin: 0;
-  min-width: 360px;
 }
 
-.popup {
-  padding: 16px;
-  width: 420px;
+.results {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px;
   color: var(--text);
-  background: var(--bg);
+  min-height: 100vh;
 }
 
 .header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   gap: 12px;
 }
 
@@ -24,9 +24,10 @@ body {
 }
 
 .subhead {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   font-size: 12px;
   color: var(--muted);
+  word-break: break-all;
 }
 
 .header-actions {
@@ -37,7 +38,7 @@ body {
 .icon-button {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--surface-2);
   display: flex;
   align-items: center;
@@ -46,10 +47,6 @@ body {
   padding: 0;
   border: 1px solid var(--border);
   color: var(--text);
-}
-
-.icon-button span {
-  line-height: 1;
 }
 
 .icon-button:focus-visible {
@@ -73,7 +70,7 @@ button:focus-visible {
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
@@ -88,13 +85,11 @@ section {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 16px;
   box-shadow: var(--shadow);
 }
 
-.actions h2,
-.filters h2,
-.list h2 {
+h2 {
   margin: 0 0 10px;
   font-size: 14px;
 }
@@ -102,10 +97,11 @@ section {
 .actions .action-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .summary {
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--muted);
 }
@@ -114,8 +110,8 @@ section {
   display: flex;
   flex-direction: column;
   font-size: 12px;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .filters input,
@@ -125,29 +121,36 @@ section {
   border-radius: 10px;
   background: var(--surface);
   color: var(--text);
-  height: 36px;
-  box-sizing: border-box;
 }
 
-.filters input:focus-visible,
-.filters select:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.filter-row {
+.filter-row{
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
 }
 
-.filter-row button {
-  height: 36px;
-  box-sizing: border-box;
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky;
+  top: 16px;
+}
+
+.sidebar section {
+  margin-bottom: 16px;
+}
+
+.main {
+  min-width: 0;
 }
 
 .list .table {
-  max-height: 260px;
+  max-height: calc(100vh - 180px);
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -156,13 +159,9 @@ section {
 
 .row {
   display: flex;
-  gap: 8px;
-  padding: 8px;
+  gap: 10px;
+  padding: 10px;
   border-bottom: 1px solid var(--border);
-}
-
-.row:hover {
-  background: var(--surface-2);
 }
 
 .row:last-child {
@@ -178,7 +177,7 @@ section {
 }
 
 .title {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .url {
@@ -191,15 +190,17 @@ section {
 }
 
 .empty {
+  margin: 0;
   font-size: 13px;
   color: var(--muted-2);
 }
 
 .status {
-  padding: 8px;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
   font-size: 13px;
   margin: 0;
+  border: 1px solid var(--border);
 }
 
 .status.success {
@@ -217,3 +218,25 @@ section {
   color: var(--info);
 }
 
+@media (max-width: 920px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .list .table {
+    max-height: 60vh;
+  }
+}
+
+
+/* Ensure the clear filter button aligns with the select/input fields. */
+.filters input,
+.filters select,
+.filter-row button {
+  height: 36px;
+  box-sizing: border-box;
+}

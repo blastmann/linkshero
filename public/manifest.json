@@ -8,21 +8,20 @@
     "default_popup": "popup.html"
   },
   "options_page": "options.html",
-  "permissions": ["activeTab", "scripting", "storage", "permissions", "webNavigation", "tabs"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "permissions",
+    "webNavigation",
+    "tabs",
+    "contextMenus",
+    "notifications"
+  ],
   "host_permissions": [
     "http://127.0.0.1:6800/*",
-    "http://localhost:6800/*",
-    "https://thepiratebay.org/*",
-    "https://piratebay.org/*",
-    "https://*.thepiratebay.org/*",
-    "https://*.thepiratebay3.co/*",
-    "https://*.thepiratebay3.com/*",
-    "https://*.thepiratebay3.net/*",
-    "https://*.thepiratebay3.se/*",
-    "https://*.thepiratebay3.to/*",
-    "https://*.piratebays.to/*"
+    "http://localhost:6800/*"
   ],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

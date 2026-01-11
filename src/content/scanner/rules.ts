@@ -2,12 +2,15 @@ import type { LinkItem, SiteRuleDefinition } from '../../shared/types'
 import { isPirateBayHost } from '../piratebay-helpers'
 import { aggregateDefault, aggregatePirateBay, type LinkAggregator } from './aggregators'
 import {
+  GENERIC_LINK_SELECTORS,
   LINK_SELECTORS,
   buildLinkItem,
   extractPirateBayStatsFromRow,
   extractPirateDisplayTitle,
   extractTitleFromAnchor,
-  isElementVisible
+  isElementVisible,
+  isLikelyValidHttpDownload,
+  normalizeHttpUrl
 } from './extractors'
 import { collectLinksFromDocument, collectLinksFromRows } from './scan-core'
 
@@ -41,18 +44,14 @@ function matchDefinition(match: SiteRuleDefinition['match'], context: ScanContex
 
 const scanAnchors = (
   doc: Document,
+  selector: string,
   extractor: (anchor: HTMLAnchorElement) => LinkItem | null
 ): LinkItem[] => {
-  const anchors = Array.from(doc.querySelectorAll<HTMLAnchorElement>(LINK_SELECTORS))
+  const anchors = Array.from(doc.querySelectorAll<HTMLAnchorElement>(selector))
   const dedupe = new Map<string, LinkItem>()
 
   anchors.forEach(anchor => {
     if (!isElementVisible(anchor)) {
-      return
-    }
-
-    const href = anchor.href
-    if (!href || dedupe.has(href)) {
       return
     }
 
@@ -61,7 +60,10 @@ const scanAnchors = (
       return
     }
 
-    dedupe.set(href, link)
+    if (!link.url || dedupe.has(link.url)) {
+      return
+    }
+    dedupe.set(link.url, link)
   })
 
   return Array.from(dedupe.values())
@@ -73,7 +75,7 @@ const pirateBayRule: ScanRule = {
   match: ({ host }) => isPirateBayHost(host),
   aggregate: aggregatePirateBay,
   scan: (doc, context) =>
-    scanAnchors(doc, anchor => {
+    scanAnchors(doc, LINK_SELECTORS, anchor => {
       const title =
         extractTitleFromAnchor(anchor, {
           rowTitle: extractPirateDisplayTitle(anchor)
@@ -90,9 +92,19 @@ const genericRule: ScanRule = {
   match: () => true,
   aggregate: aggregateDefault,
   scan: (doc, context) =>
-    scanAnchors(doc, anchor => {
+    scanAnchors(doc, GENERIC_LINK_SELECTORS, anchor => {
+      let href = anchor.href
+      if (!href) {
+        return null
+      }
+      if (/^https?:/i.test(href)) {
+        if (!isLikelyValidHttpDownload(anchor)) {
+          return null
+        }
+        href = normalizeHttpUrl(href)
+      }
       const title = extractTitleFromAnchor(anchor)
-      return buildLinkItem(anchor.href, title, context.host)
+      return buildLinkItem(href, title, context.host)
     })
 }
 

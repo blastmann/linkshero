@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
-import { SCAN_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
+ import { PUSH_MESSAGE } from '../shared/messages'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
-import type { Aria2Config, LinkItem, PushOutcome, ScanResponse, SiteRuleDefinition } from '../shared/types'
+import { injectScanner, isInjectableUrl, queryActiveTab, requestScan } from '../shared/scan-trigger'
+import type { Aria2Config, LinkItem, PushOutcome } from '../shared/types'
 
 type LinkWithSelection = LinkItem & { selected: boolean }
 
@@ -32,128 +33,6 @@ function matchesAnyKeyword(haystack: string, keywords: string[]): boolean {
     return true
   }
   return keywords.some(keyword => haystack.includes(keyword))
-}
-
-interface ActiveTab {
-  id: number
-  url?: string
-}
-
-function isInjectableUrl(url?: string | null): boolean {
-  if (!url) {
-    return true
-  }
-  return /^(https?|file|ftp):/i.test(url)
-}
-
-async function queryActiveTab(): Promise<ActiveTab> {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      const tab = tabs[0]
-      if (tab?.id !== undefined) {
-        resolve({ id: tab.id, url: tab.url })
-        return
-      }
-
-      reject(new Error('无法获取当前标签页'))
-    })
-  })
-}
-
-async function injectScanner(tabId: number, frameIds?: number[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const target = frameIds && frameIds.length ? { tabId, frameIds } : { tabId, allFrames: true }
-    chrome.scripting.executeScript(
-      {
-        target,
-        world: 'ISOLATED',
-        injectImmediately: true,
-        func: async () => {
-          const url = chrome.runtime.getURL('content.js')
-          await import(url)
-          return true
-        }
-      },
-      () => {
-        const err = chrome.runtime.lastError
-        if (err && !err.message?.includes('Cannot access a chrome:// URL')) {
-          reject(new Error(err.message))
-          return
-        }
-        resolve()
-      }
-    )
-  })
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-  return String(error)
-}
-
-async function sendScanMessage(
-  tabId: number,
-  frameId: number,
-  rules: SiteRuleDefinition[]
-): Promise<ScanResponse> {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type: SCAN_MESSAGE, rules }, { frameId }, response => {
-      const err = chrome.runtime.lastError
-      if (err) {
-        reject(new Error(err.message))
-        return
-      }
-      resolve(response as ScanResponse)
-    })
-  })
-}
-
-async function requestScan(tabId: number, rules: SiteRuleDefinition[]): Promise<LinkItem[]> {
-  const framesResult = await chrome.webNavigation
-    .getAllFrames({ tabId })
-    .catch(() => undefined as chrome.webNavigation.GetAllFrameDetails[] | undefined)
-  const frames = Array.isArray(framesResult) ? framesResult : []
-  const targets = frames.length
-    ? frames.map(frame => (frame as chrome.webNavigation.GetAllFrameDetails & { frameId?: number }).frameId ?? 0)
-    : [0]
-
-  const results = await Promise.allSettled(
-    targets.map(frameId =>
-      sendScanMessage(tabId, frameId, rules).catch(async error => {
-        const message = getErrorMessage(error)
-        if (message.includes('Receiving end does not exist')) {
-          await injectScanner(tabId, [frameId])
-          return sendScanMessage(tabId, frameId, rules)
-        }
-        throw error
-      })
-    )
-  )
-
-  const dedupe = new Set<string>()
-  const links: LinkItem[] = []
-
-  results.forEach(result => {
-    if (result.status === 'fulfilled' && result.value.success && result.value.links) {
-      result.value.links.forEach(link => {
-        if (!dedupe.has(link.url)) {
-          dedupe.add(link.url)
-          links.push(link)
-        }
-      })
-    }
-  })
-
-  if (!links.length) {
-    const rejected = results.find(r => r.status === 'rejected')
-    if (rejected && rejected.status === 'rejected') {
-      throw rejected.reason
-    }
-  }
-
-  return links
 }
 
 async function pushToBackground(payload: { links: LinkItem[]; config: Aria2Config }) {

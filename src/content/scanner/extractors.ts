@@ -2,6 +2,117 @@ import type { LinkItem } from '../../shared/types'
 import { normalizeTitleValue } from '../piratebay-helpers'
 
 export const LINK_SELECTORS = 'a[href^="magnet:"],a[href$=".torrent"]'
+export const GENERIC_LINK_SELECTORS =
+  'a[href^="magnet:"],a[href$=".torrent"],a[href^="http://"],a[href^="https://"]'
+
+const DOWNLOAD_EXTENSIONS = [
+  '.torrent',
+  '.zip',
+  '.rar',
+  '.7z',
+  '.gz',
+  '.bz2',
+  '.xz',
+  '.iso',
+  '.apk',
+  '.exe',
+  '.dmg',
+  '.mp4',
+  '.mkv',
+  '.avi',
+  '.mov',
+  '.mp3',
+  '.flac',
+  '.pdf',
+  '.epub',
+  '.srt',
+  '.ass'
+]
+
+const DOWNLOAD_QUERY_KEYS = ['download', 'dl', 'file', 'filename', 'attachment']
+
+const DOWNLOAD_KEYWORDS = [
+  'download',
+  'dl',
+  'direct',
+  'mirror',
+  'attachment',
+  '下载',
+  '直链',
+  '镜像'
+]
+
+const TRACKING_QUERY_KEYS = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'gclid',
+  'fbclid',
+  'mc_cid',
+  'mc_eid',
+  'ref',
+  'ref_src'
+]
+
+export function normalizeHttpUrl(input: string): string {
+  try {
+    const url = new URL(input)
+    // strip hash + common tracking params
+    url.hash = ''
+    TRACKING_QUERY_KEYS.forEach(key => url.searchParams.delete(key))
+    // preserve other params (e.g., download=1)
+    return url.toString()
+  } catch {
+    return input
+  }
+}
+
+function hasDownloadExtension(pathname: string): boolean {
+  const lower = pathname.toLowerCase()
+  return DOWNLOAD_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
+function hasDownloadQuery(url: URL): boolean {
+  return DOWNLOAD_QUERY_KEYS.some(key => url.searchParams.has(key))
+}
+
+function hasDownloadKeyword(anchor: HTMLAnchorElement): boolean {
+  const parts = [
+    anchor.textContent ?? '',
+    anchor.getAttribute('aria-label') ?? '',
+    anchor.getAttribute('title') ?? '',
+    anchor.className ?? ''
+  ]
+  const haystack = parts.join(' ').toLowerCase()
+  return DOWNLOAD_KEYWORDS.some(keyword => haystack.includes(keyword))
+}
+
+export function isLikelyValidHttpDownload(anchor: HTMLAnchorElement): boolean {
+  const href = anchor.href
+  if (!href || !/^https?:/i.test(href)) {
+    return false
+  }
+  if (anchor.hasAttribute('download')) {
+    return true
+  }
+  try {
+    const url = new URL(href)
+    if (hasDownloadExtension(url.pathname)) {
+      return true
+    }
+    if (hasDownloadQuery(url)) {
+      return true
+    }
+    if (hasDownloadKeyword(anchor)) {
+      return true
+    }
+  } catch {
+    return false
+  }
+  return false
+}
 
 export function isElementVisible(element: Element | null): boolean {
   if (!element || !(element instanceof HTMLElement)) {

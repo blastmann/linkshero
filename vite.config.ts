@@ -5,7 +5,10 @@ import { resolve } from 'node:path'
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: 'jsdom'
+    environment: 'jsdom',
+    setupFiles: ['tests/setup.ts'],
+    include: ['tests/**/*.test.ts'],
+    exclude: ['**/node_modules/**', 'tests/e2e/**']
   },
   build: {
     outDir: 'dist',
@@ -15,7 +18,8 @@ export default defineConfig({
         popup: resolve(__dirname, 'popup.html'),
         background: resolve(__dirname, 'src/background/index.ts'),
         content: resolve(__dirname, 'src/content/scanner.ts'),
-        options: resolve(__dirname, 'options.html')
+        options: resolve(__dirname, 'options.html'),
+        results: resolve(__dirname, 'results.html')
       },
       output: {
         manualChunks: undefined,

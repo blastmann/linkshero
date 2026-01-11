@@ -2,6 +2,13 @@ import { LLM_AGGREGATE_MESSAGE, PUSH_MESSAGE } from '../shared/messages'
 import type { LlmAggregateMessage, PushMessage } from '../shared/messages'
 import { pushLinksToAria2 } from '../shared/rpc'
 import { aggregateLinksWithLlm } from './llm'
+import { ensureContextMenu, handleContextMenuClick } from './context-menu'
+
+chrome.runtime.onInstalled.addListener(() => {
+  ensureContextMenu()
+})
+
+handleContextMenuClick()
 
 chrome.runtime.onMessage.addListener(
   (message: PushMessage | LlmAggregateMessage, _sender, sendResponse) => {
