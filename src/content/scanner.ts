@@ -1,8 +1,10 @@
 import { APPLY_TEMPLATE_MESSAGE, CLEAR_TEMPLATE_MESSAGE, PUSH_MESSAGE, SCAN_MESSAGE } from '../shared/messages'
 import { DEFAULT_ARIA2_ENDPOINT, STORAGE_KEYS } from '../shared/constants'
 import type { Aria2Config, LinkItem, SiteRuleDefinition, TemplateDefinition } from '../shared/types'
-import { buildLinkItem, extractTitleFromAnchor, isElementVisible } from './scanner/extractors'
+import { isElementVisible } from './scanner/extractors'
 import { resolveRule } from './scanner/rules'
+import { collectLinksFromRows } from './scanner/scan-core'
+import { scanByFollowingDetailPages } from './scanner/scan-follow'
 
 declare global {
   interface Window {
@@ -173,47 +175,18 @@ function matchTemplate(template: TemplateDefinition) {
 function buildTemplateRows(template: TemplateDefinition): { rows: RowState[]; links: LinkItem[] } {
   const sourceHost = window.location.hostname
   const rowElements = Array.from(document.querySelectorAll<HTMLElement>(template.selectors.row))
-  const dedupe = new Map<string, LinkItem>()
+
+  const { links, groups } = collectLinksFromRows({
+    rows: rowElements,
+    sourceHost,
+    linkSelector: template.selectors.link,
+    titleSelector: template.selectors.title
+  })
+
   const rows: RowState[] = []
-
-  rowElements.forEach((element, index) => {
+  groups.forEach(group => {
+    const element = group.element
     if (!isElementVisible(element)) {
-      return
-    }
-
-    const anchors = Array.from(element.querySelectorAll<HTMLAnchorElement>(template.selectors.link))
-    if (!anchors.length) {
-      return
-    }
-
-    const rowLinks: LinkItem[] = []
-
-    anchors.forEach(anchor => {
-      if (!isElementVisible(anchor)) {
-        return
-      }
-
-      const href = anchor.href
-      if (!href) {
-        return
-      }
-
-      if (!dedupe.has(href)) {
-        const rowTitle = template.selectors.title
-          ? element.querySelector<HTMLElement>(template.selectors.title)?.textContent?.trim() ?? null
-          : null
-        const title = extractTitleFromAnchor(anchor, { rowTitle })
-
-        dedupe.set(href, buildLinkItem(href, title, sourceHost))
-      }
-
-      const link = dedupe.get(href)
-      if (link) {
-        rowLinks.push(link)
-      }
-    })
-
-    if (!rowLinks.length) {
       return
     }
 
@@ -231,12 +204,12 @@ function buildTemplateRows(template: TemplateDefinition): { rows: RowState[]; li
     rows.push({
       element,
       checkbox,
-      links: rowLinks,
-      index
+      links: group.links,
+      index: group.index
     })
   })
 
-  return { rows, links: Array.from(dedupe.values()) }
+  return { rows, links }
 }
 
 function updateToolbar() {
@@ -447,12 +420,21 @@ function teardownTemplate() {
   templateRuntime = null
 }
 
-function scanDefaultLinks(rules: SiteRuleDefinition[] = []): LinkItem[] {
+async function scanDefaultLinks(rules: SiteRuleDefinition[] = []): Promise<LinkItem[]> {
   const context = { host: window.location.hostname, url: window.location.href }
   const rule = resolveRule(context, rules)
   logDebug('scanDefaultLinks:start', { sourceHost: context.host, rule: rule.id })
 
-  let links = rule.scan(document, context)
+  let links: LinkItem[]
+  if (rule.sourceDefinition?.follow) {
+    links = await scanByFollowingDetailPages({
+      doc: document,
+      context,
+      follow: rule.sourceDefinition.follow
+    })
+  } else {
+    links = rule.scan(document, context)
+  }
   if (rule.aggregate) {
     links = rule.aggregate(links)
   }
@@ -461,7 +443,7 @@ function scanDefaultLinks(rules: SiteRuleDefinition[] = []): LinkItem[] {
   return links
 }
 
-function scanLinks(rules: SiteRuleDefinition[] = []): LinkItem[] {
+async function scanLinks(rules: SiteRuleDefinition[] = []): Promise<LinkItem[]> {
   if (templateRuntime) {
     return templateRuntime.links.map(link => ({
       ...link,
@@ -475,15 +457,17 @@ function scanLinks(rules: SiteRuleDefinition[] = []): LinkItem[] {
 function setupListener() {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === SCAN_MESSAGE) {
-      try {
-        const links = scanLinks((message as { rules?: SiteRuleDefinition[] }).rules ?? [])
-        sendResponse({ success: true, links })
-      } catch (error) {
-        sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
+      void (async () => {
+        try {
+          const links = await scanLinks((message as { rules?: SiteRuleDefinition[] }).rules ?? [])
+          sendResponse({ success: true, links })
+        } catch (error) {
+          sendResponse({
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      })()
       return true
     }
 

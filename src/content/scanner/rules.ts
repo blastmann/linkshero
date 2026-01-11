@@ -9,6 +9,7 @@ import {
   extractTitleFromAnchor,
   isElementVisible
 } from './extractors'
+import { collectLinksFromDocument, collectLinksFromRows } from './scan-core'
 
 export interface ScanContext {
   host: string
@@ -21,6 +22,7 @@ export interface ScanRule {
   match: (context: ScanContext) => boolean
   scan: (doc: Document, context: ScanContext) => LinkItem[]
   aggregate?: LinkAggregator
+  sourceDefinition?: SiteRuleDefinition
 }
 
 function matchDefinition(match: SiteRuleDefinition['match'], context: ScanContext): boolean {
@@ -96,7 +98,7 @@ const genericRule: ScanRule = {
 
 export const defaultRules: ScanRule[] = [pirateBayRule, genericRule]
 
-function scanByRuleDefinition(
+export function scanByRuleDefinition(
   doc: Document,
   context: ScanContext,
   rule: SiteRuleDefinition
@@ -105,49 +107,25 @@ function scanByRuleDefinition(
     if (!rule.selectors.row) {
       return []
     }
+
     const rows = Array.from(doc.querySelectorAll<HTMLElement>(rule.selectors.row))
-    const dedupe = new Map<string, LinkItem>()
-    rows.forEach(row => {
-      if (!isElementVisible(row)) {
-        return
-      }
-      const anchors = Array.from(row.querySelectorAll<HTMLAnchorElement>(rule.selectors.link))
-      anchors.forEach(anchor => {
-        if (!isElementVisible(anchor)) {
-          return
-        }
-        const href = anchor.href
-        if (!href || dedupe.has(href)) {
-          return
-        }
-        const rowTitle = rule.selectors.title
-          ? row.querySelector<HTMLElement>(rule.selectors.title)?.textContent?.trim() ?? null
-          : null
-        const title = extractTitleFromAnchor(anchor, { rowTitle })
-        dedupe.set(href, buildLinkItem(href, title, context.host))
-      })
-    })
-    return Array.from(dedupe.values())
+    return collectLinksFromRows({
+      rows,
+      sourceHost: context.host,
+      linkSelector: rule.selectors.link,
+      titleSelector: rule.selectors.title,
+      extract: rule.extract,
+      rowStatsSelectors: rule.selectors
+    }).links
   }
 
-  const anchors = Array.from(doc.querySelectorAll<HTMLAnchorElement>(rule.selectors.link))
-  const dedupe = new Map<string, LinkItem>()
-  anchors.forEach(anchor => {
-    if (!isElementVisible(anchor)) {
-      return
-    }
-    const href = anchor.href
-    if (!href || dedupe.has(href)) {
-      return
-    }
-    const title = extractTitleFromAnchor(anchor, {
-      rowTitle: rule.selectors.title
-        ? doc.querySelector<HTMLElement>(rule.selectors.title)?.textContent?.trim() ?? null
-        : null
-    })
-    dedupe.set(href, buildLinkItem(href, title, context.host))
+  return collectLinksFromDocument({
+    doc,
+    sourceHost: context.host,
+    linkSelector: rule.selectors.link,
+    titleSelector: rule.selectors.title,
+    extract: rule.extract
   })
-  return Array.from(dedupe.values())
 }
 
 export function resolveRule(
@@ -163,7 +141,8 @@ export function resolveRule(
         name: rule.name,
         match: () => true,
         aggregate: aggregateDefault,
-        scan: (doc, ctx) => scanByRuleDefinition(doc, ctx, rule)
+        scan: (doc, ctx) => scanByRuleDefinition(doc, ctx, rule),
+        sourceDefinition: rule
       }
     }
   }

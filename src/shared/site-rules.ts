@@ -3,6 +3,80 @@ import type { SiteRuleDefinition } from './types'
 
 const presetRules: SiteRuleDefinition[] = [
   {
+    id: 'preset-mikan',
+    name: 'Mikan Project (列表页)',
+    enabled: true,
+    mode: 'row',
+    match: {
+      hostSuffix: ['mikanani.me'],
+      pathRegex: '^/'
+    },
+    selectors: {
+      row: 'table tbody tr, .mikan-table tbody tr',
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'td:nth-child(2) a, a.magnet, a[href$=".torrent"]'
+    }
+  },
+  {
+    id: 'preset-dmhy',
+    name: '动漫花园 DMHY (列表页)',
+    enabled: true,
+    mode: 'row',
+    match: {
+      hostSuffix: ['dmhy.org'],
+      pathRegex: '^/'
+    },
+    selectors: {
+      row: 'table tbody tr, .table tbody tr',
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'td.title a, td:nth-child(3) a, a[href$=".torrent"]'
+    }
+  },
+  {
+    id: 'preset-dmhy-share',
+    name: '动漫花园分享 (列表页)',
+    enabled: true,
+    mode: 'row',
+    match: {
+      hostSuffix: ['share.dmhy.org'],
+      pathRegex: '^/'
+    },
+    selectors: {
+      row: 'table tbody tr, .table tbody tr',
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'td.title a, td:nth-child(3) a, a[href$=".torrent"]'
+    }
+  },
+  {
+    id: 'preset-bangumi-moe',
+    name: 'Bangumi.moe (页面兜底)',
+    enabled: true,
+    mode: 'page',
+    match: {
+      hostSuffix: ['bangumi.moe'],
+      pathRegex: '^/'
+    },
+    selectors: {
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'h1'
+    }
+  },
+  {
+    id: 'preset-acg-rip',
+    name: 'ACG.RIP (列表页)',
+    enabled: true,
+    mode: 'row',
+    match: {
+      hostSuffix: ['acg.rip'],
+      pathRegex: '^/'
+    },
+    selectors: {
+      row: 'table tbody tr, .table tbody tr',
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'td.title a, td:nth-child(2) a, a[href$=".torrent"]'
+    }
+  },
+  {
     id: 'preset-nyaa',
     name: 'Nyaa (列表页)',
     enabled: true,
@@ -37,13 +111,97 @@ const presetRules: SiteRuleDefinition[] = [
     enabled: true,
     mode: 'row',
     match: {
-      hostSuffix: ['eztv.re', 'eztv.wf'],
+      hostSuffix: ['eztv.re', 'eztv.wf', 'eztv.yt'],
       pathRegex: '^/'
     },
     selectors: {
       row: 'table tr.forum_header_border',
       link: 'a[href^="magnet:"]',
       title: 'td:nth-child(2) a'
+    }
+  },
+  {
+    id: 'preset-eztv-home-follow',
+    name: 'EZTV (home 列表页跟进详情)',
+    enabled: true,
+    mode: 'page',
+    match: {
+      hostSuffix: ['eztv.re', 'eztv.wf', 'eztv.yt'],
+      pathRegex: '^/(home)?/?$'
+    },
+    selectors: {
+      // home 列表页通常不直接含 magnet；保留宽泛 selector 以兼容未来变化
+      link: 'a[href^="magnet:"],a[href$=".torrent"]'
+    },
+    follow: {
+      hrefSelector: 'a.epinfo[href^="/ep/"]',
+      limit: 30,
+      detailRule: {
+        mode: 'page',
+        selectors: {
+          link: 'a[href^="magnet:"],a[href$=".torrent"]',
+          title: 'h1'
+        },
+        extract: {
+          titleFallback: ['magnetDn', 'anchorText', 'rowText', 'href']
+        }
+      }
+    }
+  },
+  {
+    id: 'preset-1337x',
+    name: '1337x (详情页)',
+    enabled: true,
+    mode: 'page',
+    match: {
+      hostSuffix: ['1337x.to', '1377x.to'],
+      pathRegex: '^/torrent/'
+    },
+    selectors: {
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'h1'
+    }
+  },
+  {
+    id: 'preset-1337x-popular-movies',
+    name: '1337x/1377x (popular-movies 列表页跟进详情)',
+    enabled: true,
+    mode: 'page',
+    match: {
+      hostSuffix: ['1337x.to', '1377x.to'],
+      pathRegex: '^/popular-movies/?$'
+    },
+    selectors: {
+      // 本页不直接含 magnet；保留一个宽泛 selector 以兼容未来页面变化
+      link: 'a[href^="magnet:"],a[href$=".torrent"]'
+    },
+    follow: {
+      hrefSelector: 'table.table-list a[href^="/torrent/"]',
+      limit: 30,
+      detailRule: {
+        mode: 'page',
+        selectors: {
+          link: 'a[href^="magnet:"],a[href$=".torrent"]',
+          title: 'h1'
+        },
+        extract: {
+          titleFallback: ['magnetDn', 'anchorText', 'rowText', 'href']
+        }
+      }
+    }
+  },
+  {
+    id: 'preset-torrentgalaxy',
+    name: 'TorrentGalaxy (详情页)',
+    enabled: true,
+    mode: 'page',
+    match: {
+      hostSuffix: ['torrentgalaxy.to'],
+      pathRegex: '^/torrent/'
+    },
+    selectors: {
+      link: 'a[href^="magnet:"],a[href$=".torrent"]',
+      title: 'h1'
     }
   }
 ]

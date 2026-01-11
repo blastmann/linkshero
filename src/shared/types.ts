@@ -7,6 +7,7 @@ export interface LinkItem {
   normalizedTitle?: string
   seeders?: number
   leechers?: number
+  size?: string
 }
 
 export interface ScanResponse {
@@ -55,6 +56,9 @@ export interface SiteRuleSelectors {
   row?: string
   link: string
   title?: string
+  seeders?: string
+  leechers?: string
+  size?: string
 }
 
 export interface SiteRuleDefinition {
@@ -64,6 +68,15 @@ export interface SiteRuleDefinition {
   mode: SiteRuleMode
   match: TemplateMatch
   selectors: SiteRuleSelectors
+  extract?: {
+    titleAttr?: string
+    titleFallback?: Array<'magnetDn' | 'anchorText' | 'rowText' | 'href'>
+  }
+  follow?: {
+    hrefSelector: string
+    limit?: number
+    detailRule: Pick<SiteRuleDefinition, 'mode' | 'selectors' | 'extract'>
+  }
 }
 
 export type LlmProvider = 'openai-compatible'
