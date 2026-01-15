@@ -70,7 +70,7 @@ const App = () => {
       <header>
         <div>
           <h1 className="title">
-            <img src="/icons/128x128.png" alt="" style={{ width: 32, height: 32 }} />
+            <img className="app-logo" src="/icons/128x128.png" alt="" />
             Links Hero 设置
           </h1>
           <p>管理 aria2 配置。</p>
