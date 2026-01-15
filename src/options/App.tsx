@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config, saveAria2Config } from '../shared/storage'
@@ -15,6 +15,16 @@ const App = () => {
   const [loading, setLoading] = useState(true)
   const [savingConfig, setSavingConfig] = useState(false)
   const [siteRules, setSiteRules] = useState<SiteRuleDefinition[]>([])
+
+  const visibleRules = useMemo(() => {
+    // 调试模式下显示所有规则，生产模式下隐藏内置规则
+    if (import.meta.env.DEV) {
+      return siteRules
+    }
+    return siteRules.filter(rule => !rule.id.startsWith('preset-'))
+  }, [siteRules])
+
+  const showRulesSection = import.meta.env.DEV || visibleRules.length > 0
 
   useEffect(() => {
     async function bootstrap() {
@@ -60,7 +70,7 @@ const App = () => {
       <header>
         <div>
           <h1 className="title">
-            <IconGear className="title-icon" />
+            <img src="/icons/128x128.png" alt="" style={{ width: 32, height: 32 }} />
             Links Hero 设置
           </h1>
           <p>管理 aria2 配置。</p>
@@ -105,31 +115,33 @@ const App = () => {
             </button>
           </section>
 
-          <section>
-            <h2 className="section-title">
-              <IconList className="section-icon" />
-              站点规则（用于扫描）
-            </h2>
-            {siteRules.length === 0 ? (
-              <p>暂无站点规则，将使用通用扫描规则。</p>
-            ) : (
-              <ul className="rule-list">
-                {siteRules.map(rule => (
-                  <li key={rule.id}>
-                    <div>
-                      <span className="name">{rule.name}</span>
-                      <span className="meta">
-                        {rule.match.hostSuffix?.join(', ') || '*'} / {rule.match.pathRegex || '.*'}
-                      </span>
-                      <span className="meta">
-                        {rule.mode} | link: {rule.selectors.link}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          {showRulesSection && (
+            <section>
+              <h2 className="section-title">
+                <IconList className="section-icon" />
+                站点规则（用于扫描）
+              </h2>
+              {visibleRules.length === 0 ? (
+                <p>暂无站点规则，将使用通用扫描规则。</p>
+              ) : (
+                <ul className="rule-list">
+                  {visibleRules.map(rule => (
+                    <li key={rule.id}>
+                      <div>
+                        <span className="name">{rule.name}</span>
+                        <span className="meta">
+                          {rule.match.hostSuffix?.join(', ') || '*'} / {rule.match.pathRegex || '.*'}
+                        </span>
+                        <span className="meta">
+                          {rule.mode} | link: {rule.selectors.link}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
         </>
       )}
 

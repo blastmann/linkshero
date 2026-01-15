@@ -7,7 +7,7 @@ import { injectScanner, isInjectableUrl, queryActiveTab, requestScan } from '../
 import { getLinkKind, type LinkKind } from '../shared/link-kind'
 import { KeywordTagInput } from '../shared/KeywordTagInput'
 import { addKeywords, splitKeywords } from '../shared/keyword-tags'
-import { IconBolt, IconFilter, IconList, IconWand } from '../shared/icons'
+import { IconBolt, IconFilter, IconList } from '../shared/icons'
 import { ToastViewport, useToasts } from '../shared/toast'
 import type { Aria2Config, LinkItem, PushOutcome } from '../shared/types'
 
@@ -331,7 +331,7 @@ const App = () => {
       <header className="header">
         <div>
           <h1 className="title">
-            <IconWand className="title-icon" />
+            <img src="/icons/48x48.png" alt="" style={{ width: 24, height: 24 }} />
             Links Hero
           </h1>
           <p className="subhead">

@@ -120,7 +120,7 @@ button:disabled {
 .template-form {
   border: 1px dashed var(--muted-2);
   padding: 12px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   margin-top: 16px;
 }
 
