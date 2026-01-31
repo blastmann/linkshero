@@ -1,8 +1,12 @@
 import { DEFAULT_ARIA2_ENDPOINT, STORAGE_KEYS } from './constants'
-import type { Aria2Config } from './types'
+import type { Aria2Config, GeneralConfig } from './types'
 
 const defaultConfig: Aria2Config = {
   endpoint: DEFAULT_ARIA2_ENDPOINT
+}
+
+const defaultGeneralConfig: GeneralConfig = {
+  language: 'auto'
 }
 
 function withStorage<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -57,3 +61,40 @@ export async function saveAria2Config(config: Aria2Config): Promise<void> {
   )
 }
 
+export async function getGeneralConfig(): Promise<GeneralConfig> {
+  if (!chrome?.storage?.sync) {
+    return defaultGeneralConfig
+  }
+
+  return withStorage(
+    () =>
+      new Promise<GeneralConfig>((resolve, reject) => {
+        chrome.storage.sync.get([STORAGE_KEYS.generalConfig], result => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+            return
+          }
+          resolve({ ...defaultGeneralConfig, ...(result[STORAGE_KEYS.generalConfig] ?? {}) })
+        })
+      })
+  )
+}
+
+export async function saveGeneralConfig(config: GeneralConfig): Promise<void> {
+  if (!chrome?.storage?.sync) {
+    return
+  }
+
+  return withStorage(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        chrome.storage.sync.set({ [STORAGE_KEYS.generalConfig]: config }, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+            return
+          }
+          resolve()
+        })
+      })
+  )
+}

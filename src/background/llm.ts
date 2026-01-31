@@ -1,5 +1,6 @@
 import type { LinkItem, LlmConfig } from '../shared/types'
 import { getLlmConfig } from '../shared/llm-config'
+import { t } from '../shared/i18n'
 
 type LlmItem = {
   url: string
@@ -73,7 +74,7 @@ async function callOpenAiCompatible(config: LlmConfig, prompt: string): Promise<
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`LLM 请求失败: ${response.status} ${errorText}`)
+    throw new Error(t('llmRequestFailed', [response.status.toString(), errorText]))
   }
 
   const data = (await response.json()) as {
@@ -81,7 +82,7 @@ async function callOpenAiCompatible(config: LlmConfig, prompt: string): Promise<
   }
   const content = data.choices?.[0]?.message?.content?.trim()
   if (!content) {
-    throw new Error('LLM 返回为空')
+    throw new Error(t('llmEmptyResponse'))
   }
   return content
 }
@@ -132,7 +133,7 @@ export async function aggregateLinksWithLlm(
     return { ok: true, links }
   }
   if (!config.baseUrl || !config.model || !config.apiKey) {
-    return { ok: false, error: 'LLM 配置不完整' }
+    return { ok: false, error: t('llmConfigIncomplete') }
   }
 
   const limited = links.slice(0, Math.max(1, config.maxItems))

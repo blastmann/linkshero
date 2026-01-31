@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
- import { PUSH_MESSAGE } from '../shared/messages'
+import { PUSH_MESSAGE } from '../shared/messages'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
 import { injectScanner, isInjectableUrl, queryActiveTab, requestScan } from '../shared/scan-trigger'
@@ -9,6 +9,7 @@ import { KeywordTagInput } from '../shared/KeywordTagInput'
 import { addKeywords, splitKeywords } from '../shared/keyword-tags'
 import { IconBolt, IconFilter, IconList } from '../shared/icons'
 import { ToastViewport, useToasts } from '../shared/toast'
+import { useTranslation } from '../shared/i18n-provider'
 import type { Aria2Config, LinkItem, PushOutcome } from '../shared/types'
 
 type LinkWithSelection = LinkItem & { selected: boolean }
@@ -49,7 +50,10 @@ function formatLinksText(links: LinkItem[]) {
 }
 
 const App = () => {
+  const { t } = useTranslation()
   const toast = useToasts()
+
+
   const [rawLinks, setRawLinks] = useState<LinkWithSelection[]>([])
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<Status>(null)
@@ -104,7 +108,7 @@ const App = () => {
 
   useEffect(() => {
     if (!chromeReady) {
-      setStatus({ kind: 'error', text: '请在扩展环境中打开 Popup' })
+      setStatus({ kind: 'error', text: t('popupErrorEnv') })
       return
     }
 
@@ -180,7 +184,7 @@ const App = () => {
     }
 
     setLoading(true)
-    setStatus({ kind: 'info', text: '正在扫描当前页面…' })
+    setStatus({ kind: 'info', text: t('popupScanning') })
 
     try {
       const [tab, siteRules] = await Promise.all([
@@ -190,14 +194,14 @@ const App = () => {
       if (!isInjectableUrl(tab.url)) {
         setStatus({
           kind: 'error',
-          text: '当前页面无法注入（如 chrome://），请切换到普通网页后再试'
+          text: t('errorInject')
         })
         return
       }
       await injectScanner(tab.id)
       let responseLinks = await requestScan(tab.id, siteRules)
       if (!responseLinks.length) {
-        throw new Error('未能在页面中找到可用链接')
+        throw new Error(t('errorNoLinks'))
       }
 
       const next = responseLinks.map(link => ({
@@ -205,14 +209,14 @@ const App = () => {
         selected: typeof link.selected === 'boolean' ? link.selected : true
       }))
       setRawLinks(next)
-      setStatus({ kind: 'success', text: `扫描完成，共 ${next.length} 条链接` })
-      toast.success(`扫描完成：${next.length} 条`)
+      setStatus({ kind: 'success', text: t('scanSuccess', [String(next.length)]) })
+      toast.success(t('scanSuccessToast', [String(next.length)]))
     } catch (error) {
       setStatus({
         kind: 'error',
-        text: error instanceof Error ? error.message : '未知错误'
+        text: error instanceof Error ? error.message : t('errorUnknown')
       })
-      toast.error(error instanceof Error ? error.message : '扫描失败')
+      toast.error(error instanceof Error ? error.message : t('errorScanFailed'))
     } finally {
       setLoading(false)
     }
@@ -249,14 +253,14 @@ const App = () => {
     const text = formatLinksText(selectedLinks)
     try {
       await navigator.clipboard.writeText(text)
-      setStatus({ kind: 'success', text: `已复制 ${selectedLinks.length} 条链接` })
-      toast.success(`已复制 ${selectedLinks.length} 条`)
+      setStatus({ kind: 'success', text: t('copySuccess', [String(selectedLinks.length)]) })
+      toast.success(t('copySuccessToast', [String(selectedLinks.length)]))
     } catch (error) {
       setStatus({
         kind: 'error',
-        text: error instanceof Error ? error.message : '复制失败'
+        text: error instanceof Error ? error.message : t('copyFailed')
       })
-      toast.error(error instanceof Error ? error.message : '复制失败')
+      toast.error(error instanceof Error ? error.message : t('copyFailed'))
     }
   }
 
@@ -272,17 +276,17 @@ const App = () => {
     anchor.download = `links-${Date.now()}.txt`
     anchor.click()
     URL.revokeObjectURL(url)
-    setStatus({ kind: 'success', text: '已导出所选链接' })
-    toast.success('已导出 .txt')
+    setStatus({ kind: 'success', text: t('exportSuccess') })
+    toast.success(t('exportSuccessToast'))
   }
 
   const handlePush = async () => {
     if (!selectedLinks.length) {
-      setStatus({ kind: 'error', text: '请至少选择一条链接' })
+      setStatus({ kind: 'error', text: t('pushSelectNone') })
       return
     }
 
-    setStatus({ kind: 'info', text: '正在推送到 aria2…' })
+    setStatus({ kind: 'info', text: t('pushing') })
     try {
       const response = await pushToBackground({
         links: selectedLinks,
@@ -290,29 +294,29 @@ const App = () => {
       })
 
       if (!response.ok || !response.result) {
-        throw new Error(response.error ?? '推送失败')
+        throw new Error(response.error ?? t('pushFailedGeneric'))
       }
 
       const { succeeded, failed } = response.result
       if (failed.length) {
         setStatus({
           kind: 'error',
-          text: `成功 ${succeeded} 条，失败 ${failed.length} 条`
+          text: t('pushPartial', [String(succeeded), String(failed.length)])
         })
-        toast.error(`推送失败 ${failed.length} 条（成功 ${succeeded}）`)
+        toast.error(t('pushPartialToast', [String(failed.length), String(succeeded)]))
       } else {
         setStatus({
           kind: 'success',
-          text: `已成功推送 ${succeeded} 条链接`
+          text: t('pushSuccess', [String(succeeded)])
         })
-        toast.success(`推送成功：${succeeded} 条`)
+        toast.success(t('pushSuccessToast', [String(succeeded)]))
       }
     } catch (error) {
       setStatus({
         kind: 'error',
-        text: error instanceof Error ? error.message : '推送失败'
+        text: error instanceof Error ? error.message : t('pushFailedGeneric')
       })
-      toast.error(error instanceof Error ? error.message : '推送失败')
+      toast.error(error instanceof Error ? error.message : t('pushFailedGeneric'))
     }
   }
 
@@ -332,10 +336,10 @@ const App = () => {
         <div>
           <h1 className="title">
             <img src="/icons/48x48.png" alt="" style={{ width: 24, height: 24 }} />
-            Links Hero
+            {t('actionTitle')}
           </h1>
           <p className="subhead">
-            {loading ? '正在扫描…' : `已捕获 ${rawLinks.length} 条链接`}
+            {loading ? t('headerLoading') : t('headerCaptured', [String(rawLinks.length)])}
             {ariaConfig.endpoint ? ` · aria2: ${ariaConfig.endpoint}` : ''}
           </p>
         </div>
@@ -343,8 +347,8 @@ const App = () => {
           <button
             className="icon-button"
             onClick={openSettingsPage}
-            title="打开配置页"
-            aria-label="打开配置页"
+            title={t('btnSettings')}
+            aria-label={t('btnSettings')}
           >
             <span aria-hidden="true">⚙</span>
           </button>
@@ -354,8 +358,8 @@ const App = () => {
               void handleScan()
             }}
             disabled={loading || !chromeReady}
-            title="重新扫描"
-            aria-label="重新扫描"
+            title={t('btnRescan')}
+            aria-label={t('btnRescan')}
           >
             <span aria-hidden="true">{loading ? '⏳' : '↻'}</span>
           </button>
@@ -365,42 +369,41 @@ const App = () => {
       <section className="actions">
         <h2 className="section-title">
           <IconBolt className="section-icon" />
-          批量操作
+          {t('sectBatch')}
         </h2>
         <div className="action-row">
           <button onClick={() => toggleAll(true)} disabled={!filteredLinks.length}>
-            全选
+            {t('btnSelectAll')}
           </button>
           <button onClick={() => toggleAll(false)} disabled={!filteredLinks.length}>
-            全不选
+            {t('btnSelectNone')}
           </button>
           <button onClick={handleCopy} disabled={!selectedLinks.length}>
-            复制所选
+            {t('btnCopy')}
           </button>
           <button onClick={handleExport} disabled={!selectedLinks.length}>
-            导出 .txt
+            {t('btnExport')}
           </button>
           <button className="primary" onClick={handlePush} disabled={!selectedLinks.length}>
-            推送 aria2
+            {t('btnPush')}
           </button>
         </div>
         <p className="summary">
-          显示 {filteredLinks.length} / 共 {rawLinks.length} 条，已选 {selectedLinks.length} 条（来源：
-          {rawLinks[0]?.sourceHost ?? '—'}）
+          {t('summaryStats', [String(filteredLinks.length), String(rawLinks.length), String(selectedLinks.length), rawLinks[0]?.sourceHost ?? '—'])}
         </p>
       </section>
 
       <section className="filters">
         <h2 className="section-title">
           <IconFilter className="section-icon" />
-          快速过滤
+          {t('sectFilter')}
         </h2>
-        <div className="chips" role="group" aria-label="快捷筛选">
+        <div className="chips" role="group" aria-label={t('sectFilter')}>
           {(
             [
-              { kind: 'magnet', label: '磁链' },
-              { kind: 'torrent', label: '种子' },
-              { kind: 'http', label: '直链' }
+              { kind: 'magnet', label: t('kindMagnet') },
+              { kind: 'torrent', label: t('kindTorrent') },
+              { kind: 'http', label: t('kindHttp') }
             ] as const
           ).map(item => {
             const active = kindFilters.includes(item.kind)
@@ -415,7 +418,7 @@ const App = () => {
                   )
                 }}
                 aria-pressed={active}
-                title={`${item.label}：${kindCounts[item.kind]} 条`}
+                title={t('chipTitle', [item.label, String(kindCounts[item.kind])])}
               >
                 {item.label}
                 <span className="chip-count">{kindCounts[item.kind]}</span>
@@ -423,12 +426,12 @@ const App = () => {
             )
           })}
           <span className="chips-meta">
-            命中 {filteredLinks.length} / {rawLinks.length}
+            {t('filterHit', [String(filteredLinks.length), String(rawLinks.length)])}
           </span>
         </div>
         <KeywordTagInput
-          label="包含关键词"
-          placeholder="输入后按 Enter"
+          label={t('inputInclude')}
+          placeholder={t('inputPlaceholder')}
           tags={includeTags}
           value={includeDraft}
           onChangeTags={setIncludeTags}
@@ -442,8 +445,8 @@ const App = () => {
           }}
         />
         <KeywordTagInput
-          label="排除关键词"
-          placeholder="输入后按 Enter"
+          label={t('inputExclude')}
+          placeholder={t('inputPlaceholder')}
           tags={excludeTags}
           value={excludeDraft}
           onChangeTags={setExcludeTags}
@@ -458,11 +461,11 @@ const App = () => {
         />
         <div className="filter-row">
           <div className="field">
-            <span className="field-label">排序</span>
+            <span className="field-label">{t('labelSort')}</span>
             <select value={sortBy} onChange={event => setSortBy(event.target.value as typeof sortBy)}>
-              <option value="none">默认</option>
-              <option value="title-asc">标题 A→Z</option>
-              <option value="title-desc">标题 Z→A</option>
+              <option value="none">{t('sortDefault')}</option>
+              <option value="title-asc">{t('sortAsc')}</option>
+              <option value="title-desc">{t('sortDesc')}</option>
             </select>
           </div>
           <button
@@ -476,7 +479,7 @@ const App = () => {
               setKindFilters([])
             }}
           >
-            清空过滤
+            {t('btnClearFilter')}
           </button>
         </div>
       </section>
@@ -484,11 +487,11 @@ const App = () => {
       <section className="list">
         <h2 className="section-title">
           <IconList className="section-icon" />
-          链接列表
+          {t('sectList')}
         </h2>
         {filteredLinks.length === 0 ? (
           <p className="empty">
-            {rawLinks.length === 0 ? '暂无数据，点击“扫描当前页”开始。' : '过滤条件下没有匹配结果。'}
+            {rawLinks.length === 0 ? t('listEmptyInit') : t('listEmptyFilter')}
           </p>
         ) : (
           <div className="table">

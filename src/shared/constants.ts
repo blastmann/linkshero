@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   aria2Config: 'linksHero.aria2Config',
   siteRules: 'linksHero.siteRules',
   llmConfig: 'linksHero.llmConfig',
-  lastScanResult: 'linksHero.lastScanResult'
+  lastScanResult: 'linksHero.lastScanResult',
+  generalConfig: 'linksHero.generalConfig'
 } as const
 

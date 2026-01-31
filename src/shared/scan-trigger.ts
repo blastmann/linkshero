@@ -1,5 +1,6 @@
 import type { LinkItem, ScanResponse, SiteRuleDefinition } from './types'
 import { SCAN_MESSAGE } from './messages'
+import { t } from './i18n'
 
 export interface ActiveTabInfo {
   id: number
@@ -16,11 +17,11 @@ export interface ChromeScanDeps {
 const DEFAULT_DEPS: ChromeScanDeps | null =
   typeof chrome !== 'undefined' && chrome.tabs && chrome.scripting && chrome.webNavigation && chrome.runtime
     ? {
-        tabs: chrome.tabs,
-        scripting: chrome.scripting,
-        webNavigation: chrome.webNavigation,
-        runtime: chrome.runtime
-      }
+      tabs: chrome.tabs,
+      scripting: chrome.scripting,
+      webNavigation: chrome.webNavigation,
+      runtime: chrome.runtime
+    }
     : null
 
 export function isInjectableUrl(url?: string | null): boolean {
@@ -45,7 +46,7 @@ export async function queryActiveTab(deps: ChromeScanDeps = DEFAULT_DEPS as Chro
         resolve({ id: tab.id, url: tab.url })
         return
       }
-      reject(new Error('无法获取当前标签页'))
+      reject(new Error(t('errorNoActiveTab')))
     })
   })
 }

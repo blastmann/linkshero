@@ -4,15 +4,16 @@ import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config, saveAria2Config } from '../shared/storage'
 import type { Aria2Config, SiteRuleDefinition } from '../shared/types'
 import { IconGear, IconList } from '../shared/icons'
+import { useTranslation } from '../shared/i18n-provider'
 
 type Status = { kind: 'success' | 'error' | 'info'; text: string } | null
 
 const App = () => {
+  const { t, language, setLanguage, ready } = useTranslation()
   const [ariaConfig, setAriaConfig] = useState<Aria2Config>({
     endpoint: DEFAULT_ARIA2_ENDPOINT
   })
   const [status, setStatus] = useState<Status>(null)
-  const [loading, setLoading] = useState(true)
   const [savingConfig, setSavingConfig] = useState(false)
   const [siteRules, setSiteRules] = useState<SiteRuleDefinition[]>([])
 
@@ -38,10 +39,10 @@ const App = () => {
       } catch (error) {
         setStatus({
           kind: 'error',
-          text: error instanceof Error ? error.message : '加载配置失败'
+          text: error instanceof Error ? error.message : t('optErrorLoad')
         })
       } finally {
-        setLoading(false)
+        // loaded
       }
     }
 
@@ -52,11 +53,11 @@ const App = () => {
     setSavingConfig(true)
     try {
       await saveAria2Config(ariaConfig)
-      setStatus({ kind: 'success', text: '配置已保存' })
+      setStatus({ kind: 'success', text: t('optSaved') })
     } catch (error) {
       setStatus({
         kind: 'error',
-        text: error instanceof Error ? error.message : '保存配置失败'
+        text: error instanceof Error ? error.message : t('optErrorSave')
       })
     } finally {
       setSavingConfig(false)
@@ -71,23 +72,34 @@ const App = () => {
         <div>
           <h1 className="title">
             <img className="app-logo" src="/icons/128x128.png" alt="" />
-            Links Hero 设置
+            {t('optTitle')}
           </h1>
-          <p>管理 aria2 配置。</p>
+          <p>{t('optDesc')}</p>
+        </div>
+        <div className="header-actions">
+          <select
+            value={language}
+            onChange={e => setLanguage(e.target.value as any)}
+            style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+          >
+            <option value="auto">Auto</option>
+            <option value="zh_CN">简体中文</option>
+            <option value="en">English</option>
+          </select>
         </div>
       </header>
 
-      {loading ? (
-        <p>加载中…</p>
+      {!ready ? (
+        <p>{t('optLoading')}</p>
       ) : (
         <>
           <section>
             <h2 className="section-title">
               <IconGear className="section-icon" />
-              aria2 配置
+              {t('sectAria')}
             </h2>
             <label>
-              RPC 地址
+              {t('lblRpc')}
               <input
                 type="url"
                 value={ariaConfig.endpoint}
@@ -95,7 +107,7 @@ const App = () => {
               />
             </label>
             <label>
-              Token（可选）
+              {t('lblToken')}
               <input
                 type="text"
                 value={ariaConfig.token ?? ''}
@@ -103,7 +115,7 @@ const App = () => {
               />
             </label>
             <label>
-              下载目录（可选）
+              {t('lblDir')}
               <input
                 type="text"
                 value={ariaConfig.dir ?? ''}
@@ -111,7 +123,7 @@ const App = () => {
               />
             </label>
             <button onClick={handleSaveConfig} disabled={savingConfig}>
-              {savingConfig ? '保存中…' : '保存配置'}
+              {savingConfig ? t('btnSaving') : t('btnSave')}
             </button>
           </section>
 
@@ -119,10 +131,10 @@ const App = () => {
             <section>
               <h2 className="section-title">
                 <IconList className="section-icon" />
-                站点规则（用于扫描）
+                {t('sectRules')}
               </h2>
               {visibleRules.length === 0 ? (
-                <p>暂无站点规则，将使用通用扫描规则。</p>
+                <p>{t('noRules')}</p>
               ) : (
                 <ul className="rule-list">
                   {visibleRules.map(rule => (

@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import { addKeywords, splitKeywords } from './keyword-tags'
+import { useTranslation } from './i18n-provider'
 
 type Props = {
   label: string
@@ -18,6 +19,7 @@ export function KeywordTagInput({
   onChangeTags,
   onChangeValue
 }: Props) {
+  const { t } = useTranslation()
   const commit = () => {
     const next = addKeywords(tags, value)
     if (next !== tags) {
@@ -55,7 +57,7 @@ export function KeywordTagInput({
             type="button"
             className="tag"
             onClick={() => removeTag(tag)}
-            title="点击删除"
+            title={t('tagDelete')}
           >
             <span className="tag-text">{tag}</span>
             <span className="tag-x" aria-hidden="true">
@@ -73,7 +75,7 @@ export function KeywordTagInput({
           onBlur={() => commit()}
         />
       </div>
-      <span className="tag-input-helper">按 Enter 或用逗号分隔生成关键词标签</span>
+      <span className="tag-input-helper">{t('tagInputHelper')}</span>
     </label>
   )
 }

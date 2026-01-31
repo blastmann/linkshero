@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from './i18n-provider'
 
 export type ToastKind = 'success' | 'error' | 'info'
 
@@ -63,6 +64,8 @@ export function ToastViewport({
   toasts: Toast[]
   onDismiss: (id: string) => void
 }) {
+  const { t } = useTranslation()
+
   if (!toasts.length) {
     return null
   }
@@ -73,7 +76,7 @@ export function ToastViewport({
         <div key={item.id} className={`toast ${item.kind}`} role="status">
           <div className="toast-dot" aria-hidden="true" />
           <div className="toast-text">{item.text}</div>
-          <button className="toast-close" onClick={() => onDismiss(item.id)} aria-label="关闭提示">
+          <button className="toast-close" onClick={() => onDismiss(item.id)} aria-label={t('toastClose')}>
             ×
           </button>
         </div>

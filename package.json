@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:all": "vitest run && playwright test"
+    "test:all": "vitest run && playwright test",
+    "zip": "cd dist && bestzip ../links-hero-v0.1.0.zip *",
+    "release": "npm run build && npm run zip"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -24,6 +26,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "bestzip": "^2.2.1",
     "jsdom": "^26.0.0",
     "playwright": "^1.57.0",
     "typescript": "~5.9.3",

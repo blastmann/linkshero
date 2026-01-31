@@ -1,5 +1,6 @@
 import { DEFAULT_ARIA2_ENDPOINT } from './constants'
 import type { Aria2Config, LinkItem, PushOutcome } from './types'
+import { t } from './i18n'
 
 interface RpcBody {
   jsonrpc: '2.0'
@@ -52,11 +53,11 @@ async function sendRpcRequest<T>(config: Aria2Config, method: string, params?: u
 
   const payload = (await response.json()) as RpcResponse<T>
   if (payload.error) {
-    throw new Error(payload.error.message || 'aria2 返回错误')
+    throw new Error(payload.error.message || t('rpcAriaError'))
   }
 
   if (typeof payload.result === 'undefined') {
-    throw new Error('aria2 无响应')
+    throw new Error(t('rpcNoResponse'))
   }
 
   return payload.result
@@ -86,7 +87,7 @@ function parseMulticall(entries: MulticallEntry[], links: LinkItem[]): PushOutco
     if (first && typeof first === 'object' && 'faultCode' in first) {
       failures.push({
         url: link?.url ?? 'unknown',
-        reason: (first as { faultString?: string }).faultString ?? '未知错误'
+        reason: (first as { faultString?: string }).faultString ?? t('rpcUnknownError')
       })
       return
     }
@@ -122,7 +123,7 @@ async function pushSequentially(links: LinkItem[], config: Aria2Config): Promise
     } catch (error) {
       failures.push({
         url: link.url,
-        reason: error instanceof Error ? error.message : '未知错误'
+        reason: error instanceof Error ? error.message : t('rpcUnknownError')
       })
     }
   }

@@ -79,3 +79,9 @@ export interface LlmConfig {
   batchSize: number
 }
 
+export type AppLanguage = 'auto' | 'zh_CN' | 'en'
+
+export interface GeneralConfig {
+  language: AppLanguage
+}
+
