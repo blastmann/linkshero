@@ -25,6 +25,13 @@ function buildSearchText(link: LinkItem): string {
   return `${link.title ?? ''} ${link.url ?? ''} ${link.sourceHost ?? ''} ${link.normalizedTitle ?? ''}`.toLowerCase()
 }
 
+function matchesAllKeywords(haystack: string, keywords: string[]): boolean {
+  if (!keywords.length) {
+    return true
+  }
+  return keywords.every(keyword => haystack.includes(keyword))
+}
+
 function matchesAnyKeyword(haystack: string, keywords: string[]): boolean {
   if (!keywords.length) {
     return true
@@ -77,7 +84,7 @@ const App = () => {
     const excludes = [...excludeTags, ...splitKeywords(excludeDraft)]
 
     if (includes.length) {
-      result = result.filter(link => matchesAnyKeyword(buildSearchText(link), includes))
+      result = result.filter(link => matchesAllKeywords(buildSearchText(link), includes))
     }
 
     if (excludes.length) {
