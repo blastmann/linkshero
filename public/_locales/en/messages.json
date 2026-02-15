@@ -193,13 +193,13 @@
         }
     },
     "inputInclude": {
-        "message": "Include Keywords"
+        "message": "Include Keywords (Match All)"
     },
     "inputPlaceholder": {
         "message": "Type and press Enter"
     },
     "inputExclude": {
-        "message": "Exclude Keywords"
+        "message": "Exclude Keywords (Match Any)"
     },
     "labelSort": {
         "message": "Sort"

@@ -193,13 +193,13 @@
         }
     },
     "inputInclude": {
-        "message": "包含关键词"
+        "message": "包含关键词（全部匹配）"
     },
     "inputPlaceholder": {
         "message": "输入后按 Enter"
     },
     "inputExclude": {
-        "message": "排除关键词"
+        "message": "排除关键词（任意匹配）"
     },
     "labelSort": {
         "message": "排序"
