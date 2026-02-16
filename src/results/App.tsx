@@ -7,6 +7,7 @@ import { parseLastScanResult, type LastScanResult } from './scan-result'
 import { getLinkKind, type LinkKind } from '../shared/link-kind'
 import { KeywordTagInput } from '../shared/KeywordTagInput'
 import { addKeywords, splitKeywords } from '../shared/keyword-tags'
+import { buildSearchText, matchesAllKeywords, matchesAnyKeyword } from '../shared/link-filters'
 import { IconBolt, IconFilter, IconList, IconWand } from '../shared/icons'
 import { ToastViewport, useToasts } from '../shared/toast'
 import { useTranslation } from '../shared/i18n-provider'
@@ -20,24 +21,6 @@ type Status =
   | null
 
 const chromeReady = typeof chrome !== 'undefined' && !!chrome.storage && !!chrome.runtime
-function buildSearchText(link: LinkItem): string {
-  return `${link.title ?? ''} ${link.url ?? ''} ${link.sourceHost ?? ''} ${link.normalizedTitle ?? ''}`.toLowerCase()
-}
-
-function matchesAllKeywords(haystack: string, keywords: string[]): boolean {
-  if (!keywords.length) {
-    return true
-  }
-  return keywords.every(keyword => haystack.includes(keyword))
-}
-
-function matchesAnyKeyword(haystack: string, keywords: string[]): boolean {
-  if (!keywords.length) {
-    return true
-  }
-  return keywords.some(keyword => haystack.includes(keyword))
-}
-
 function formatLinksText(links: LinkItem[]) {
   return links.map(link => link.url).join('\n')
 }
