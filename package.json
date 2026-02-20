@@ -1,7 +1,7 @@
 {
   "name": "links-hero",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chrome 扩展：扫描当前页下载链接并推送到 aria2",
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:all": "vitest run && playwright test",
-    "zip": "cd dist && bestzip ../links-hero-v0.1.0.zip *",
+    "zip": "cd dist && bestzip ../links-hero-v0.1.1.zip *",
     "release": "npm run build && npm run zip"
   },
   "dependencies": {
