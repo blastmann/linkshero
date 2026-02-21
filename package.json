@@ -1,7 +1,7 @@
 {
   "name": "links-hero",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Chrome 扩展：扫描当前页下载链接并推送到 aria2",
   "type": "module",
   "scripts": {
