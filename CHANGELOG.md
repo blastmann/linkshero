@@ -1,3 +1,10 @@
+## [0.2.1](https://github.com/blastmann/linkshero/compare/v0.2.0...v0.2.1) (2026-02-21)
+
+
+### Bug Fixes
+
+* **test:** stabilize CI unit tests in non-extension runtime ([bf1f8ac](https://github.com/blastmann/linkshero/commit/bf1f8ac6c5eff36e09daaeb4b0868514559db139))
+
 # [0.2.0](https://github.com/blastmann/linkshero/compare/v0.1.1...v0.2.0) (2026-02-21)
 
 
