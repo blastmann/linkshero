@@ -1,0 +1,12 @@
+1
+Ubuntu 24.04 Desktop ISO
+UploaderA 120 10
+2
+Ubuntu 24.04 Desktop ISO
+UploaderB 300 18
+3
+Fedora 41 Workstation
+UploaderC 210 22
+4
+Fedora 41 Workstation
+UploaderD 210 12

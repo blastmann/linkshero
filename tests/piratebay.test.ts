@@ -14,7 +14,7 @@ type TestLink = {
 }
 
 function parseFixture(): TestLink[] {
-  const filePath = path.resolve(__dirname, '../sample_data/titles.txt')
+  const filePath = path.resolve(__dirname, './fixtures/piratebay-titles.txt')
   const content = fs.readFileSync(filePath, 'utf-8')
   const lines = content
     .split('\n')

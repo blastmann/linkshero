@@ -19,9 +19,10 @@ function createChromeMock() {
 }
 
 describe('background context menu', () => {
-  it('ensureContextMenu creates the menu item', () => {
+  it('ensureContextMenu creates the menu item', async () => {
     const chromeMock = createChromeMock()
     ensureContextMenu({ chrome: chromeMock as any })
+    await new Promise(resolve => setTimeout(resolve, 0))
 
     expect(chromeMock.contextMenus.removeAll).toHaveBeenCalledTimes(1)
     expect(chromeMock.contextMenus.create).toHaveBeenCalledWith(

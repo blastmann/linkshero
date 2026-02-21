@@ -9,25 +9,30 @@ export const CONTEXT_MENU_ID = 'links-hero/scan-valid-links'
 let cachedMessages: Record<string, { message: string }> | null = null
 
 async function updateI18nState() {
-  const config = await getGeneralConfig()
-  if (config.language !== 'auto') {
-    cachedMessages = await fetchLocaleMessages(resolveLanguage(config.language))
-  } else {
+  try {
+    const config = await getGeneralConfig()
+    if (config.language !== 'auto') {
+      cachedMessages = await fetchLocaleMessages(resolveLanguage(config.language))
+      return
+    }
+    cachedMessages = null
+  } catch {
+    // In tests/non-extension runtimes, chrome storage may be unavailable.
     cachedMessages = null
   }
 }
 
 // Simple translation helper for background script
-function tBg(key: string): string {
+function tBg(key: string, chromeApi?: Pick<typeof chrome, 'i18n'>): string {
   if (cachedMessages && cachedMessages[key]) {
     return cachedMessages[key].message
   }
-  return chrome.i18n.getMessage(key)
+  return chromeApi?.i18n?.getMessage?.(key) || key
 }
 
 
 export interface ContextMenuDeps {
-  chrome: Pick<typeof chrome, 'contextMenus' | 'runtime' | 'tabs' | 'storage' | 'notifications'>
+  chrome: Pick<typeof chrome, 'contextMenus' | 'runtime' | 'tabs' | 'storage' | 'notifications' | 'i18n'>
   getSiteRulesFn?: typeof getSiteRules
   injectScannerFn?: typeof injectScanner
   requestScanFn?: typeof requestScan
@@ -54,18 +59,18 @@ export function ensureContextMenu(deps?: ContextMenuDeps) {
     chromeApi.contextMenus.removeAll(() => {
       chromeApi.contextMenus.create({
         id: CONTEXT_MENU_ID,
-        title: tBg('ctxMenuTitle'),
+        title: tBg('ctxMenuTitle', chromeApi),
         contexts: ['page', 'frame', 'selection', 'link']
       })
     })
   })
 
   // Basic listener for updates (simplified)
-  chrome.storage.onChanged.addListener((changes, area) => {
+  chromeApi.storage?.onChanged?.addListener?.((changes, area) => {
     if (area === 'sync' && changes[STORAGE_KEYS.generalConfig]) {
       updateI18nState().then(() => {
-        chromeApi.contextMenus.update(CONTEXT_MENU_ID, {
-          title: tBg('ctxMenuTitle')
+        chromeApi.contextMenus?.update?.(CONTEXT_MENU_ID, {
+          title: tBg('ctxMenuTitle', chromeApi)
         })
       })
     }
@@ -92,14 +97,14 @@ export async function runScanFromContextMenu(
     tabUrl = tab.url
   }
   if (!isInjectableUrlFn(tabUrl)) {
-    throw new Error(tBg('errorInject'))
+    throw new Error(tBg('errorInject', chromeApi))
   }
 
   const rules = await getSiteRulesFn().catch(() => [])
   await injectScannerFn(tabId)
   const links = await requestScanFn(tabId, rules)
   if (!links.length) {
-    throw new Error(tBg('errorNoLinks'))
+    throw new Error(tBg('errorNoLinks', chromeApi))
   }
 
   await chromeApi.storage.session.set({
