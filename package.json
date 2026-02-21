@@ -12,8 +12,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:all": "vitest run && playwright test",
-    "zip": "cd dist && bestzip ../links-hero-v0.1.1.zip *",
-    "release": "npm run build && npm run zip"
+    "zip": "node scripts/zip.mjs",
+    "release": "semantic-release"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -26,9 +26,17 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/exec": "^7.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.6",
+    "@semantic-release/npm": "^12.0.2",
+    "@semantic-release/release-notes-generator": "^14.1.0",
     "bestzip": "^2.2.1",
     "jsdom": "^26.0.0",
     "playwright": "^1.57.0",
+    "semantic-release": "^24.2.9",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
     "vitest": "^2.1.9"
