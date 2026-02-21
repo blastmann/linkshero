@@ -1,3 +1,10 @@
+## [0.2.2](https://github.com/blastmann/linkshero/compare/v0.2.1...v0.2.2) (2026-02-21)
+
+
+### Bug Fixes
+
+* **release:** trigger packaging workflow run ([f161758](https://github.com/blastmann/linkshero/commit/f161758ca845f1d967b8ae619dc5bda1a542c194))
+
 ## [0.2.1](https://github.com/blastmann/linkshero/compare/v0.2.0...v0.2.1) (2026-02-21)
 
 
