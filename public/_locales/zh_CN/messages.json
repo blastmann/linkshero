@@ -64,6 +64,31 @@
     "copyFailed": {
         "message": "复制失败"
     },
+    "clipboardEmpty": {
+        "message": "剪贴板为空"
+    },
+    "clipboardNoLinks": {
+        "message": "剪贴板中未找到可用下载链接"
+    },
+    "clipboardReadFailed": {
+        "message": "读取剪贴板失败"
+    },
+    "clipboardImportSuccess": {
+        "message": "已从剪贴板导入 $COUNT$ 条链接",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "clipboardImportSuccessToast": {
+        "message": "剪贴板导入成功：$COUNT$ 条",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
     "exportSuccess": {
         "message": "已导出所选链接"
     },
@@ -145,6 +170,9 @@
     },
     "btnCopy": {
         "message": "复制所选"
+    },
+    "btnImportClipboard": {
+        "message": "从剪贴板导入"
     },
     "btnExport": {
         "message": "导出 .txt"

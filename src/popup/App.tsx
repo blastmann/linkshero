@@ -5,6 +5,7 @@ import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
 import { injectScanner, isInjectableUrl, queryActiveTab, requestScan } from '../shared/scan-trigger'
 import { getLinkKind, type LinkKind } from '../shared/link-kind'
+import { extractLinksFromClipboardText } from '../shared/clipboard-links'
 import { KeywordTagInput } from '../shared/KeywordTagInput'
 import { addKeywords, splitKeywords } from '../shared/keyword-tags'
 import { buildSearchText, matchesAllKeywords, matchesAnyKeyword } from '../shared/link-filters'
@@ -254,6 +255,43 @@ const App = () => {
     }
   }
 
+  const handleImportClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text.trim()) {
+        setStatus({ kind: 'error', text: t('clipboardEmpty') })
+        return
+      }
+
+      let sourceHost = 'clipboard'
+      try {
+        const tab = await queryActiveTab()
+        if (tab.url) {
+          sourceHost = new URL(tab.url).hostname || sourceHost
+        }
+      } catch {
+        // ignore and keep fallback host
+      }
+
+      const links = extractLinksFromClipboardText(text, sourceHost)
+      if (!links.length) {
+        setStatus({ kind: 'error', text: t('clipboardNoLinks') })
+        return
+      }
+
+      const next = links.map(link => ({ ...link, selected: true }))
+      setRawLinks(next)
+      setStatus({ kind: 'success', text: t('clipboardImportSuccess', [String(next.length)]) })
+      toast.success(t('clipboardImportSuccessToast', [String(next.length)]))
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        text: error instanceof Error ? `${t('clipboardReadFailed')}: ${error.message}` : t('clipboardReadFailed')
+      })
+      toast.error(t('clipboardReadFailed'))
+    }
+  }
+
   const handleExport = () => {
     if (!selectedLinks.length) {
       return
@@ -370,6 +408,9 @@ const App = () => {
           </button>
           <button onClick={handleCopy} disabled={!selectedLinks.length}>
             {t('btnCopy')}
+          </button>
+          <button onClick={handleImportClipboard}>
+            {t('btnImportClipboard')}
           </button>
           <button onClick={handleExport} disabled={!selectedLinks.length}>
             {t('btnExport')}

@@ -64,6 +64,31 @@
     "copyFailed": {
         "message": "Copy failed"
     },
+    "clipboardEmpty": {
+        "message": "Clipboard is empty"
+    },
+    "clipboardNoLinks": {
+        "message": "No valid download links found in clipboard"
+    },
+    "clipboardReadFailed": {
+        "message": "Failed to read clipboard"
+    },
+    "clipboardImportSuccess": {
+        "message": "Imported $COUNT$ links from clipboard",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
+    "clipboardImportSuccessToast": {
+        "message": "Clipboard import success: $COUNT$ links",
+        "placeholders": {
+            "count": {
+                "content": "$1"
+            }
+        }
+    },
     "exportSuccess": {
         "message": "Selected links exported"
     },
@@ -145,6 +170,9 @@
     },
     "btnCopy": {
         "message": "Copy Selected"
+    },
+    "btnImportClipboard": {
+        "message": "Import from Clipboard"
     },
     "btnExport": {
         "message": "Export .txt"
