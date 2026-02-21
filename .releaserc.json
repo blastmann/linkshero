@@ -41,7 +41,7 @@
       {
         "assets": [
           {
-            "path": "links-hero-v${nextRelease.version}.zip",
+            "path": "links-hero-v*.zip",
             "label": "Chrome Extension Zip"
           }
         ]
