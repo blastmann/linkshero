@@ -20,6 +20,9 @@
     "errorInject": {
         "message": "Cannot inject into current page (e.g. chrome://), please try on a normal web page"
     },
+    "errorHostPermission": {
+        "message": "Host permission is missing. Click Rescan and allow permission in the prompt."
+    },
     "errorNoLinks": {
         "message": "No valid links found on page"
     },
@@ -199,6 +202,12 @@
     },
     "sectFilter": {
         "message": "Quick Filter"
+    },
+    "filterCollapse": {
+        "message": "Collapse"
+    },
+    "filterExpand": {
+        "message": "Expand"
     },
     "kindMagnet": {
         "message": "Magnet"

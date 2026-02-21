@@ -20,6 +20,9 @@
     "errorInject": {
         "message": "当前页面无法注入（如 chrome://），请切换到普通网页后再试"
     },
+    "errorHostPermission": {
+        "message": "当前站点未授权访问，请点击“重新扫描”并在权限弹窗中允许"
+    },
     "errorNoLinks": {
         "message": "未能在页面中找到可用链接"
     },
@@ -199,6 +202,12 @@
     },
     "sectFilter": {
         "message": "快速过滤"
+    },
+    "filterCollapse": {
+        "message": "收起"
+    },
+    "filterExpand": {
+        "message": "展开"
     },
     "kindMagnet": {
         "message": "磁链"

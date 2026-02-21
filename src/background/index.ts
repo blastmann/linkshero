@@ -10,6 +10,28 @@ chrome.runtime.onInstalled.addListener(() => {
 
 handleContextMenuClick()
 
+const canUseSidePanel =
+  typeof chrome.sidePanel !== 'undefined' &&
+  typeof chrome.sidePanel.setPanelBehavior === 'function' &&
+  typeof chrome.sidePanel.open === 'function'
+
+if (canUseSidePanel) {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch(error => console.warn('[Links Hero] failed to enable side panel action behavior', error))
+
+  chrome.action.onClicked.addListener(tab => {
+    if (typeof tab.windowId !== 'number') {
+      return
+    }
+    chrome.sidePanel
+      .open({ windowId: tab.windowId })
+      .catch(error => console.warn('[Links Hero] failed to open side panel from action click', error))
+  })
+} else {
+  console.warn('[Links Hero] sidePanel API unavailable in current browser runtime')
+}
+
 chrome.runtime.onMessage.addListener(
   (message: PushMessage | LlmAggregateMessage, _sender, sendResponse) => {
     if (message?.type === PUSH_MESSAGE) {

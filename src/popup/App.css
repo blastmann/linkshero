@@ -1,11 +1,23 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-width: 360px;
+  min-width: 0;
 }
 
 .popup {
   padding: 16px;
-  width: 420px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
   color: var(--text);
   background: var(--bg);
 }
@@ -17,7 +29,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 320px;
+  width: min(320px, calc(100vw - 24px));
   z-index: 9999;
   pointer-events: none;
 }
@@ -165,7 +177,7 @@ button.secondary {
 }
 
 section {
-  margin-bottom: 16px;
+  margin-bottom: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -179,6 +191,20 @@ section {
   gap: 10px;
 }
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.filter-toggle {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--surface-2);
+}
+
 .section-icon {
   color: var(--muted);
 }
@@ -186,7 +212,7 @@ section {
 .actions h2,
 .filters h2,
 .list h2 {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 14px;
 }
 
@@ -373,11 +399,21 @@ section {
 }
 
 .list .table {
-  max-height: 260px;
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .row {
@@ -385,6 +421,7 @@ section {
   gap: 8px;
   padding: 8px;
   border-bottom: 1px solid var(--border);
+  min-width: 0;
 }
 
 .row:hover {
@@ -401,6 +438,7 @@ section {
   gap: 4px;
   font-size: 12px;
   width: 100%;
+  min-width: 0;
 }
 
 .title {
@@ -408,8 +446,12 @@ section {
 }
 
 .url {
+  display: block;
+  max-width: 100%;
   color: var(--primary);
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .host {

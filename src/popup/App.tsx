@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
 import { PUSH_MESSAGE } from '../shared/messages'
 import { getSiteRules } from '../shared/site-rules'
@@ -23,6 +23,49 @@ type Status =
   | null
 
 const chromeReady = typeof chrome !== 'undefined' && !!chrome.tabs
+
+function toOriginPattern(url?: string | null): string | null {
+  if (!url) {
+    return null
+  }
+  try {
+    const parsed = new URL(url)
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return null
+    }
+    return `${parsed.origin}/*`
+  } catch {
+    return null
+  }
+}
+
+async function containsOriginPermission(originPattern: string): Promise<boolean> {
+  return new Promise(resolve => {
+    chrome.permissions.contains({ origins: [originPattern] }, granted => resolve(Boolean(granted)))
+  })
+}
+
+async function requestOriginPermission(originPattern: string): Promise<boolean> {
+  return new Promise(resolve => {
+    chrome.permissions.request({ origins: [originPattern] }, granted => resolve(Boolean(granted)))
+  })
+}
+
+async function ensureOriginPermission(url: string | undefined, prompt: boolean): Promise<boolean> {
+  if (!chrome.permissions) {
+    return true
+  }
+  const originPattern = toOriginPattern(url)
+  if (!originPattern) {
+    return true
+  }
+  const granted = await containsOriginPermission(originPattern)
+  if (granted || !prompt) {
+    return granted
+  }
+  return requestOriginPermission(originPattern)
+}
+
 async function pushToBackground(payload: { links: LinkItem[]; config: Aria2Config }) {
   return new Promise<{ ok: boolean; result?: PushOutcome; error?: string }>((resolve, reject) => {
     chrome.runtime.sendMessage({ type: PUSH_MESSAGE, payload }, response => {
@@ -48,7 +91,6 @@ const App = () => {
   const [rawLinks, setRawLinks] = useState<LinkWithSelection[]>([])
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<Status>(null)
-  const [autoTriggered, setAutoTriggered] = useState(false)
   const [ariaConfig, setAriaConfig] = useState<Aria2Config>({
     endpoint: DEFAULT_ARIA2_ENDPOINT
   })
@@ -56,8 +98,11 @@ const App = () => {
   const [excludeTags, setExcludeTags] = useState<string[]>([])
   const [includeDraft, setIncludeDraft] = useState('')
   const [excludeDraft, setExcludeDraft] = useState('')
+  const [filtersCollapsed, setFiltersCollapsed] = useState(true)
   const [sortBy, setSortBy] = useState<'none' | 'title-asc' | 'title-desc'>('none')
   const [kindFilters, setKindFilters] = useState<LinkKind[]>([])
+  const scanInFlightRef = useRef(false)
+  const scheduledScanRef = useRef<number | null>(null)
 
   const selectedLinks = useMemo(() => rawLinks.filter(link => link.selected), [rawLinks])
 
@@ -110,69 +155,14 @@ const App = () => {
       .catch(error => setStatus({ kind: 'error', text: error.message }))
   }, [])
 
-  useEffect(() => {
+  const handleScan = useCallback(async (options?: { promptPermission?: boolean }) => {
     if (!chromeReady) {
       return
     }
-
-    const isDevtoolsLikelyOpen = () => {
-      // Heuristic: DevTools docked changes window outer/inner sizes.
-      // (Undocked devtools won't affect this, but also typically doesn't trigger the same blur behavior.)
-      const widthGap = Math.abs(window.outerWidth - window.innerWidth)
-      const heightGap = Math.abs(window.outerHeight - window.innerHeight)
-      return widthGap > 140 || heightGap > 140
-    }
-
-    const closePopup = () => {
-      try {
-        window.close()
-      } catch {
-        // ignore
-      }
-    }
-
-    const handleVisibility = () => {
-      if (document.hidden) {
-        closePopup()
-      }
-    }
-
-    const handleBlur = () => {
-      // Defer to allow Chrome to update focus/visibility state.
-      window.setTimeout(() => {
-        if (document.hidden) {
-          closePopup()
-          return
-        }
-
-        // If DevTools is opening/docked, blur can happen but popup should stay.
-        if (!document.hasFocus() && !isDevtoolsLikelyOpen()) {
-          closePopup()
-        }
-      }, 0)
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closePopup()
-      }
-    }
-
-    window.addEventListener('blur', handleBlur)
-    document.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      window.removeEventListener('blur', handleBlur)
-      document.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [])
-
-  const handleScan = useCallback(async () => {
-    if (!chromeReady) {
+    if (scanInFlightRef.current) {
       return
     }
+    scanInFlightRef.current = true
 
     setLoading(true)
     setStatus({ kind: 'info', text: t('popupScanning') })
@@ -188,6 +178,10 @@ const App = () => {
           text: t('errorInject')
         })
         return
+      }
+      const hasPermission = await ensureOriginPermission(tab.url, Boolean(options?.promptPermission))
+      if (!hasPermission) {
+        throw new Error(t('errorHostPermission'))
       }
       await injectScanner(tab.id)
       let responseLinks = await requestScan(tab.id, siteRules)
@@ -209,17 +203,74 @@ const App = () => {
       })
       toast.error(error instanceof Error ? error.message : t('errorScanFailed'))
     } finally {
+      scanInFlightRef.current = false
       setLoading(false)
     }
   }, [])
 
+  const scheduleAutoScan = useCallback(
+    (delayMs = 180) => {
+      if (!chromeReady) {
+        return
+      }
+
+      if (scheduledScanRef.current !== null) {
+        window.clearTimeout(scheduledScanRef.current)
+      }
+
+      scheduledScanRef.current = window.setTimeout(() => {
+        scheduledScanRef.current = null
+        void handleScan({ promptPermission: false })
+      }, delayMs)
+    },
+    [handleScan]
+  )
+
   useEffect(() => {
-    if (!chromeReady || autoTriggered) {
+    if (!chromeReady) {
       return
     }
-    setAutoTriggered(true)
-    void handleScan()
-  }, [autoTriggered, handleScan])
+
+    scheduleAutoScan(0)
+  }, [scheduleAutoScan])
+
+  useEffect(() => {
+    if (!chromeReady) {
+      return
+    }
+
+    const handleTabActivated = (_activeInfo: chrome.tabs.TabActiveInfo) => {
+      scheduleAutoScan()
+    }
+
+    const handleTabUpdated = (
+      _tabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo,
+      tab: chrome.tabs.Tab
+    ) => {
+      if (changeInfo.status !== 'complete' || !tab.active) {
+        return
+      }
+      scheduleAutoScan()
+    }
+
+    chrome.tabs.onActivated.addListener(handleTabActivated)
+    chrome.tabs.onUpdated.addListener(handleTabUpdated)
+
+    return () => {
+      chrome.tabs.onActivated.removeListener(handleTabActivated)
+      chrome.tabs.onUpdated.removeListener(handleTabUpdated)
+    }
+  }, [scheduleAutoScan])
+
+  useEffect(
+    () => () => {
+      if (scheduledScanRef.current !== null) {
+        window.clearTimeout(scheduledScanRef.current)
+      }
+    },
+    []
+  )
 
   const updateSelection = (id: string, selected: boolean) => {
     setRawLinks(prev => prev.map(link => (link.id === id ? { ...link, selected } : link)))
@@ -383,7 +434,7 @@ const App = () => {
           <button
             className="icon-button"
             onClick={() => {
-              void handleScan()
+              void handleScan({ promptPermission: true })
             }}
             disabled={loading || !chromeReady}
             title={t('btnRescan')}
@@ -425,10 +476,20 @@ const App = () => {
       </section>
 
       <section className="filters">
-        <h2 className="section-title">
-          <IconFilter className="section-icon" />
-          {t('sectFilter')}
-        </h2>
+        <div className="section-title-row">
+          <h2 className="section-title">
+            <IconFilter className="section-icon" />
+            {t('sectFilter')}
+          </h2>
+          <button
+            type="button"
+            className="filter-toggle"
+            onClick={() => setFiltersCollapsed(prev => !prev)}
+            aria-expanded={!filtersCollapsed}
+          >
+            {filtersCollapsed ? t('filterExpand') : t('filterCollapse')}
+          </button>
+        </div>
         <div className="chips" role="group" aria-label={t('sectFilter')}>
           {(
             [
@@ -460,59 +521,63 @@ const App = () => {
             {t('filterHit', [String(filteredLinks.length), String(rawLinks.length)])}
           </span>
         </div>
-        <KeywordTagInput
-          label={t('inputInclude')}
-          placeholder={t('inputPlaceholder')}
-          tags={includeTags}
-          value={includeDraft}
-          onChangeTags={setIncludeTags}
-          onChangeValue={value => {
-            if (value.includes(',') || value.includes('，')) {
-              setIncludeTags(prev => addKeywords(prev, value))
-              setIncludeDraft('')
-              return
-            }
-            setIncludeDraft(value)
-          }}
-        />
-        <KeywordTagInput
-          label={t('inputExclude')}
-          placeholder={t('inputPlaceholder')}
-          tags={excludeTags}
-          value={excludeDraft}
-          onChangeTags={setExcludeTags}
-          onChangeValue={value => {
-            if (value.includes(',') || value.includes('，')) {
-              setExcludeTags(prev => addKeywords(prev, value))
-              setExcludeDraft('')
-              return
-            }
-            setExcludeDraft(value)
-          }}
-        />
-        <div className="filter-row">
-          <div className="field">
-            <span className="field-label">{t('labelSort')}</span>
-            <select value={sortBy} onChange={event => setSortBy(event.target.value as typeof sortBy)}>
-              <option value="none">{t('sortDefault')}</option>
-              <option value="title-asc">{t('sortAsc')}</option>
-              <option value="title-desc">{t('sortDesc')}</option>
-            </select>
-          </div>
-          <button
-            className="secondary"
-            onClick={() => {
-              setIncludeTags([])
-              setExcludeTags([])
-              setIncludeDraft('')
-              setExcludeDraft('')
-              setSortBy('none')
-              setKindFilters([])
-            }}
-          >
-            {t('btnClearFilter')}
-          </button>
-        </div>
+        {!filtersCollapsed && (
+          <>
+            <KeywordTagInput
+              label={t('inputInclude')}
+              placeholder={t('inputPlaceholder')}
+              tags={includeTags}
+              value={includeDraft}
+              onChangeTags={setIncludeTags}
+              onChangeValue={value => {
+                if (value.includes(',') || value.includes('，')) {
+                  setIncludeTags(prev => addKeywords(prev, value))
+                  setIncludeDraft('')
+                  return
+                }
+                setIncludeDraft(value)
+              }}
+            />
+            <KeywordTagInput
+              label={t('inputExclude')}
+              placeholder={t('inputPlaceholder')}
+              tags={excludeTags}
+              value={excludeDraft}
+              onChangeTags={setExcludeTags}
+              onChangeValue={value => {
+                if (value.includes(',') || value.includes('，')) {
+                  setExcludeTags(prev => addKeywords(prev, value))
+                  setExcludeDraft('')
+                  return
+                }
+                setExcludeDraft(value)
+              }}
+            />
+            <div className="filter-row">
+              <div className="field">
+                <span className="field-label">{t('labelSort')}</span>
+                <select value={sortBy} onChange={event => setSortBy(event.target.value as typeof sortBy)}>
+                  <option value="none">{t('sortDefault')}</option>
+                  <option value="title-asc">{t('sortAsc')}</option>
+                  <option value="title-desc">{t('sortDesc')}</option>
+                </select>
+              </div>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setIncludeTags([])
+                  setExcludeTags([])
+                  setIncludeDraft('')
+                  setExcludeDraft('')
+                  setSortBy('none')
+                  setKindFilters([])
+                }}
+              >
+                {t('btnClearFilter')}
+              </button>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="list">

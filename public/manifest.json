@@ -12,7 +12,6 @@
   },
   "action": {
     "default_title": "__MSG_actionTitle__",
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/16x16.png",
       "32": "icons/32x32.png",
@@ -23,6 +22,7 @@
   "options_page": "options.html",
   "permissions": [
     "activeTab",
+    "sidePanel",
     "clipboardRead",
     "scripting",
     "storage",
@@ -35,6 +35,13 @@
   "background": {
     "service_worker": "background.js",
     "type": "module"
+  },
+  "optional_host_permissions":[
+    "https://*/*",
+    "http://*/*"
+  ],
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "web_accessible_resources": [
     {
