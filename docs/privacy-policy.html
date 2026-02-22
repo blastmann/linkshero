@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Links Hero Privacy Policy</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.65;
+        color: #1f2937;
+        background: #f9fafb;
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 24px;
+      }
+      h1, h2 {
+        color: #111827;
+      }
+      code {
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .muted {
+        color: #6b7280;
+      }
+      hr {
+        border: none;
+        border-top: 1px solid #e5e7eb;
+        margin: 24px 0;
+      }
+      ul {
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Links Hero Privacy Policy</h1>
+      <p class="muted">Last updated: 2026-02-22</p>
+
+      <h2>简体中文</h2>
+      <p>
+        Links Hero（Chrome 扩展）用于从当前网页提取下载链接（如 HTTP/HTTPS、Magnet、Torrent），并可将链接复制、导出或推送到你配置的 Aria2 RPC 服务。
+      </p>
+
+      <h2>我们收集哪些数据</h2>
+      <ul>
+        <li>我们<strong>不收集</strong>可识别个人身份的信息。</li>
+        <li>我们<strong>不上传</strong>你的浏览历史或页面内容到开发者服务器。</li>
+        <li>扩展配置（如 Aria2 RPC 地址、Token、下载目录、模板等）仅保存在浏览器本地 <code>chrome.storage</code>。</li>
+      </ul>
+
+      <h2>我们如何使用数据</h2>
+      <ul>
+        <li>在你主动触发时扫描当前标签页中的下载链接。</li>
+        <li>在本地去重、筛选、展示并执行复制/导出。</li>
+        <li>按你的操作将选中任务发送到你配置的 Aria2 RPC 端点（例如 <code>localhost:6800</code>）。</li>
+      </ul>
+
+      <h2>数据共享与第三方</h2>
+      <ul>
+        <li>我们不会将数据出售或共享给广告商。</li>
+        <li>当你点击“推送到 Aria2”时，数据会发送到你指定的 Aria2 服务；该服务的数据处理行为由你自己的部署和配置决定。</li>
+      </ul>
+
+      <h2>数据保留与删除</h2>
+      <ul>
+        <li>本地配置会保留在你的浏览器中，直到你手动清除扩展数据或卸载扩展。</li>
+        <li>你可随时在扩展设置中修改配置。</li>
+      </ul>
+
+      <h2>权限说明（简要）</h2>
+      <ul>
+        <li><code>activeTab</code> / <code>scripting</code>：在你触发时扫描当前页面链接。</li>
+        <li><code>tabs</code> / <code>webNavigation</code>：定位标签与框架，确保链接提取完整。</li>
+        <li><code>storage</code>：保存本地设置。</li>
+        <li><code>contextMenus</code> / <code>notifications</code>：提供快捷入口与结果反馈。</li>
+        <li><code>clipboardRead</code> / <code>sidePanel</code> / <code>permissions</code>：支持对应交互功能与权限管理。</li>
+      </ul>
+
+      <h2>联系我们</h2>
+      <p>
+        如有隐私问题，请通过 GitHub Issues 联系：<br />
+        <a href="https://github.com/blastmann/linkshero/issues">https://github.com/blastmann/linkshero/issues</a>
+      </p>
+
+      <hr />
+
+      <h2>English</h2>
+      <p>
+        Links Hero (Chrome extension) helps users extract download links from the current page (HTTP/HTTPS, Magnet, Torrent) and copy, export, or send them to a user-configured Aria2 RPC endpoint.
+      </p>
+
+      <h2>What data we collect</h2>
+      <ul>
+        <li>We do <strong>not</strong> collect personally identifiable information.</li>
+        <li>We do <strong>not</strong> upload browsing history or page content to developer servers.</li>
+        <li>Extension settings (such as Aria2 RPC URL, token, download directory, and templates) are stored locally in <code>chrome.storage</code>.</li>
+      </ul>
+
+      <h2>How we use data</h2>
+      <ul>
+        <li>Scan links on the active page only when the user triggers the action.</li>
+        <li>Perform local deduplication/filtering/display and copy/export actions.</li>
+        <li>Send selected tasks to the Aria2 RPC endpoint configured by the user (for example, <code>localhost:6800</code>).</li>
+      </ul>
+
+      <h2>Data sharing</h2>
+      <ul>
+        <li>We do not sell data or share it with advertisers.</li>
+        <li>When the user clicks "Push to Aria2", data is sent to the user-selected Aria2 service; handling at that endpoint depends on the user's own deployment.</li>
+      </ul>
+
+      <h2>Data retention and deletion</h2>
+      <ul>
+        <li>Local settings remain in the browser until the user clears extension data or uninstalls the extension.</li>
+        <li>Users can update settings at any time.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>
+        For privacy questions, please open an issue:<br />
+        <a href="https://github.com/blastmann/linkshero/issues">https://github.com/blastmann/linkshero/issues</a>
+      </p>
+    </main>
+  </body>
+</html>
