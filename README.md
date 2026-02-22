@@ -1,29 +1,52 @@
 # Links Hero
 
-Chrome 扩展，按照 `SPEC.md` 的 MVP 要求实现以下功能：
+中文说明：[`README.zh-CN.md`](./README.zh-CN.md)
 
-- 扫描当前页面的 `magnet:`、`.torrent` 以及 HTTP/HTTPS 下载链接
-- 去重并展示列表，支持全选/反选
-- 复制或导出所选链接
-- 将所选链接通过 aria2 JSON-RPC (`system.multicall` 优先) 推送
+A Chrome extension that scans downloadable links on the current page, lets you filter in batch, and pushes selected links to aria2.
 
-## 开发
+## Features
+
+- Automatically scans `magnet:`, `.torrent`, and likely-download HTTP/HTTPS links from the active tab
+- Supports site rules (built-in presets + generic rule), including "list page -> detail page" follow-up scanning
+- Supports multi-frame scanning, deduplication, select all/none, copy, export `.txt`, and clipboard import
+- Supports filtering by keywords (include/exclude), link type (magnet/torrent/http), and title sorting
+- Supports right-click context menu scan and reviewing results in standalone `results.html`
+- Supports pushing selected links to aria2 JSON-RPC (prefers `system.multicall`, falls back to single calls)
+- Supports bilingual UI (`auto` / `zh_CN` / `en`)
+
+## Usage
+
+- Click extension action: opens the main UI in Side Panel and auto-scans current page
+- Right-click page menu: `Links Hero: Find valid links on current page`, then opens results page
+- Options page: configure aria2 RPC endpoint, token, download directory, language, etc.
+
+> On first visit to a site, host permission may be required. Allow it when prompted.
+
+## Development & Build
 
 ```bash
 npm install
-npm run dev   # 仅调试 Popup UI
-npm run build # 生成 dist/，在 Chrome 中以“加载已解压扩展”方式导入
+npm run dev        # Vite dev (UI debugging)
+npm run typecheck  # TypeScript checks
+npm run test       # Vitest unit tests
+npm run test:e2e   # Playwright E2E tests
+npm run build      # build into dist/
 ```
 
-## 目录
+After build, open `chrome://extensions`, enable Developer mode, click "Load unpacked", and select `dist/`.
 
-- `src/popup`：Popup UI（打开即自动扫描）
-- `src/options`：插件配置页（aria2、模板）
-- `src/content`：扫描脚本（按需注入）
-- `src/background`：Service Worker，负责 aria2 RPC
-- `src/shared`：跨端通用类型与工具
+## Project Structure
 
-## 配置
+- `src/background`: service worker (message routing, aria2 push, context menu, side panel behavior)
+- `src/content`: content script and scanning engine (rule matching, extraction, dedupe, follow-up fetch)
+- `src/popup`: side panel main UI (scan, filters, batch actions)
+- `src/results`: result page UI for context-menu-triggered scans
+- `src/options`: options page (aria2, language, rule display)
+- `src/shared`: shared types, storage, i18n, message contracts, utilities
+- `public/manifest.json`: extension manifest and permissions
 
-点击 Popup 右上角“打开配置页”或在扩展详情页进入 Options，可设置 aria2 RPC 地址、token、下载目录以及站点模板；所有配置保存在 `chrome.storage.sync`。
+## Storage
+
+- Persistent config uses `chrome.storage.sync` (aria2 config, site rules, language, etc.)
+- Temporary scan result for results page uses `chrome.storage.session`
 
