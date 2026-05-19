@@ -1,3 +1,10 @@
+## [0.2.3](https://github.com/blastmann/linkshero/compare/v0.2.2...v0.2.3) (2026-05-19)
+
+
+### Bug Fixes
+
+* respect filters and live aria2 config ([2347c63](https://github.com/blastmann/linkshero/commit/2347c63ec4b45cc086e9c685fc700466c4b8c43a))
+
 ## [0.2.2](https://github.com/blastmann/linkshero/compare/v0.2.1...v0.2.2) (2026-02-21)
 
 
