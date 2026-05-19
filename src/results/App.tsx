@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
+import { DEFAULT_ARIA2_ENDPOINT, STORAGE_KEYS } from '../shared/constants'
 import { PUSH_MESSAGE } from '../shared/messages'
-import { STORAGE_KEYS } from '../shared/constants'
 import type { Aria2Config, LinkItem, PushOutcome } from '../shared/types'
 import { parseLastScanResult, type LastScanResult } from './scan-result'
 import { getLinkKind, type LinkKind } from '../shared/link-kind'
@@ -80,8 +79,6 @@ const App = () => {
   const [sortBy, setSortBy] = useState<'none' | 'title-asc' | 'title-desc'>('none')
   const [kindFilters, setKindFilters] = useState<LinkKind[]>([])
 
-  const selectedLinks = useMemo(() => rawLinks.filter(link => link.selected), [rawLinks])
-
   const filteredLinks = useMemo(() => {
     let result = [...rawLinks]
     const includes = [...includeTags, ...splitKeywords(includeDraft)]
@@ -104,6 +101,8 @@ const App = () => {
     }
     return result
   }, [rawLinks, includeTags, excludeTags, includeDraft, excludeDraft, sortBy, kindFilters])
+
+  const selectedLinks = useMemo(() => filteredLinks.filter(link => link.selected), [filteredLinks])
 
   const kindCounts = useMemo(() => {
     const counts: Record<LinkKind, number> = { magnet: 0, torrent: 0, http: 0, other: 0 }
@@ -135,6 +134,32 @@ const App = () => {
         setLoading(false)
       }
     })()
+  }, [])
+
+  useEffect(() => {
+    if (!chromeReady || !chrome.storage?.onChanged) {
+      return
+    }
+
+    const handleStorageChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== 'sync') {
+        return
+      }
+      const nextConfig = changes[STORAGE_KEYS.aria2Config]?.newValue as Partial<Aria2Config> | undefined
+      if (!nextConfig) {
+        return
+      }
+      setAriaConfig({
+        ...nextConfig,
+        endpoint: nextConfig.endpoint ?? DEFAULT_ARIA2_ENDPOINT
+      })
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChanged)
+    return () => chrome.storage.onChanged.removeListener(handleStorageChanged)
   }, [])
 
   const updateSelection = (id: string, selected: boolean) => {
@@ -404,4 +429,3 @@ const App = () => {
 }
 
 export default App
-

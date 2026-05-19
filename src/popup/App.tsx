@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_ARIA2_ENDPOINT } from '../shared/constants'
+import { DEFAULT_ARIA2_ENDPOINT, STORAGE_KEYS } from '../shared/constants'
 import { PUSH_MESSAGE } from '../shared/messages'
 import { getSiteRules } from '../shared/site-rules'
 import { getAria2Config } from '../shared/storage'
@@ -104,8 +104,6 @@ const App = () => {
   const scanInFlightRef = useRef(false)
   const scheduledScanRef = useRef<number | null>(null)
 
-  const selectedLinks = useMemo(() => rawLinks.filter(link => link.selected), [rawLinks])
-
   const filteredLinks = useMemo(() => {
     let result = [...rawLinks]
 
@@ -134,6 +132,8 @@ const App = () => {
     return result
   }, [rawLinks, includeTags, excludeTags, includeDraft, excludeDraft, sortBy, kindFilters])
 
+  const selectedLinks = useMemo(() => filteredLinks.filter(link => link.selected), [filteredLinks])
+
   const kindCounts = useMemo(() => {
     const counts: Record<LinkKind, number> = { magnet: 0, torrent: 0, http: 0, other: 0 }
     rawLinks.forEach(link => {
@@ -153,6 +153,32 @@ const App = () => {
         setAriaConfig(config)
       })
       .catch(error => setStatus({ kind: 'error', text: error.message }))
+  }, [])
+
+  useEffect(() => {
+    if (!chromeReady || !chrome.storage?.onChanged) {
+      return
+    }
+
+    const handleStorageChanged = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== 'sync') {
+        return
+      }
+      const nextConfig = changes[STORAGE_KEYS.aria2Config]?.newValue as Partial<Aria2Config> | undefined
+      if (!nextConfig) {
+        return
+      }
+      setAriaConfig({
+        ...nextConfig,
+        endpoint: nextConfig.endpoint ?? DEFAULT_ARIA2_ENDPOINT
+      })
+    }
+
+    chrome.storage.onChanged.addListener(handleStorageChanged)
+    return () => chrome.storage.onChanged.removeListener(handleStorageChanged)
   }, [])
 
   const handleScan = useCallback(async (options?: { promptPermission?: boolean }) => {
@@ -617,4 +643,3 @@ const App = () => {
 }
 
 export default App
-
